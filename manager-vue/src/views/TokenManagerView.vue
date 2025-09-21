@@ -241,9 +241,31 @@
               <thead>
                 <tr>
                   <th>邮箱备注</th>
-                  <th>过期时间</th>
+                  <th
+                    class="sortable-header"
+                    @click="sortTokens('expiry_date')"
+                    :class="{ 'sorted': sortField === 'expiry_date' }"
+                  >
+                    过期时间
+                    <i
+                      v-if="sortField === 'expiry_date'"
+                      :class="['bi', 'ms-1', sortOrder === 'asc' ? 'bi-arrow-up' : 'bi-arrow-down']"
+                    ></i>
+                    <i v-else class="bi bi-arrow-up-down ms-1 text-muted"></i>
+                  </th>
                   <th>剩余时长</th>
-                  <th>剩余次数</th>
+                  <th
+                    class="sortable-header"
+                    @click="sortTokens('credits_balance')"
+                    :class="{ 'sorted': sortField === 'credits_balance' }"
+                  >
+                    剩余次数
+                    <i
+                      v-if="sortField === 'credits_balance'"
+                      :class="['bi', 'ms-1', sortOrder === 'asc' ? 'bi-arrow-up' : 'bi-arrow-down']"
+                    ></i>
+                    <i v-else class="bi bi-arrow-up-down ms-1 text-muted"></i>
+                  </th>
                   <th>状态</th>
                   <th class="w-1">操作</th>
                 </tr>
@@ -1547,6 +1569,10 @@ watch(viewMode, (newMode) => {
   localStorage.setItem('token-manager-view-mode', newMode)
 }, { immediate: false })
 
+// 排序状态管理 - 默认按过期时间升序排序
+const sortField = ref<string | null>('expiry_date')
+const sortOrder = ref<'asc' | 'desc'>('asc')
+
 // 执行模态框状态
 const showExecuteModal = ref(false)
 const currentExecuteToken = ref<Token | null>(null)
@@ -1802,19 +1828,29 @@ const loadTokens = async (page: number = 1) => {
   }
 }
 
-// 获取筛选后的Token数据
+// 获取筛选和排序后的Token数据
 const getFilteredTokens = () => {
-  if (!activeFilter.value) {
-    return allTokens.value
+  let filteredTokens = allTokens.value
+
+  // 应用筛选
+  if (activeFilter.value) {
+    filteredTokens = filteredTokens.filter(token => {
+      const status = getTokenStatus(token)
+      if (activeFilter.value === '不可用') {
+        return status === '封禁' || status === '燃尽' || status === '过期'
+      }
+      return status === activeFilter.value
+    })
   }
 
-  return allTokens.value.filter(token => {
-    const status = getTokenStatus(token)
-    if (activeFilter.value === '不可用') {
-      return status === '封禁' || status === '燃尽' || status === '过期'
-    }
-    return status === activeFilter.value
-  })
+  // 应用排序
+  if (sortField.value) {
+    filteredTokens = [...filteredTokens].sort((a, b) =>
+      compareTokens(a, b, sortField.value!, sortOrder.value)
+    )
+  }
+
+  return filteredTokens
 }
 
 // 更新前端分页显示
@@ -1863,7 +1899,58 @@ const toggleFilter = (status: string) => {
 const refreshTokens = async () => {
   allTokens.value = [] // 清空缓存
   activeFilter.value = null // 清空筛选
+  sortField.value = null // 清空排序
   await loadTokens(1) // 重新加载第一页
+}
+
+// 排序功能
+const sortTokens = (field: string) => {
+  if (sortField.value === field) {
+    // 如果点击的是当前排序字段，切换排序方向或清除排序
+    if (sortOrder.value === 'asc') {
+      sortOrder.value = 'desc'
+    } else {
+      // 从降序回到无排序状态
+      sortField.value = null
+      sortOrder.value = 'asc'
+    }
+  } else {
+    // 点击新字段，设置为升序
+    sortField.value = field
+    sortOrder.value = 'asc'
+  }
+
+  // 排序后回到第一页
+  updatePagination(1)
+}
+
+// Token比较函数
+const compareTokens = (a: Token, b: Token, field: string, order: 'asc' | 'desc'): number => {
+  let aValue: any
+  let bValue: any
+
+  if (field === 'expiry_date') {
+    // 过期时间排序
+    const aPortalInfo = parsePortalInfo(a.portal_info)
+    const bPortalInfo = parsePortalInfo(b.portal_info)
+
+    aValue = aPortalInfo?.expiry_date ? new Date(aPortalInfo.expiry_date).getTime() : 0
+    bValue = bPortalInfo?.expiry_date ? new Date(bPortalInfo.expiry_date).getTime() : 0
+  } else if (field === 'credits_balance') {
+    // 剩余次数排序
+    const aPortalInfo = parsePortalInfo(a.portal_info)
+    const bPortalInfo = parsePortalInfo(b.portal_info)
+
+    aValue = aPortalInfo?.credits_balance ?? 0
+    bValue = bPortalInfo?.credits_balance ?? 0
+  }
+
+  // 处理相等情况
+  if (aValue === bValue) return 0
+
+  // 升序或降序
+  const result = aValue < bValue ? -1 : 1
+  return order === 'asc' ? result : -result
 }
 
 // 辅助函数
@@ -3696,6 +3783,32 @@ i.refresh-spin {
   .card-sm .avatar i {
     font-size: 1rem;
   }
+}
+
+/* 排序表头样式 */
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease;
+}
+
+.sortable-header:hover {
+  background-color: var(--tblr-bg-surface-secondary);
+}
+
+.sortable-header.sorted {
+  background-color: var(--tblr-bg-surface-secondary);
+  font-weight: 600;
+}
+
+.sortable-header i {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.sortable-header.sorted i {
+  opacity: 1;
+  color: var(--tblr-primary);
 }
 
 /* 中等屏幕优化 */
