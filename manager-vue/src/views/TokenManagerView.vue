@@ -2271,7 +2271,7 @@ const saveToken = async () => {
       successMessage = 'Token重新激活成功'
     } else {
       // 普通模式：创建新Token
-      response = await apiPost('/api/auth/save-token', payload)
+      response = await apiPost('/api/tokens', payload)
     }
 
     const data = await response.json()
