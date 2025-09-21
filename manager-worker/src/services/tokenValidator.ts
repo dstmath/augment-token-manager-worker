@@ -107,16 +107,7 @@ export class WorkerTokenValidator {
       response_status_text: response.statusText
     };
 
-    if (this.enableDebug) {
-      console.log('=== Worker Token Validation Debug Info ===');
-      console.log('Request URL:', apiUrl);
-      console.log('Request Headers:', requestHeaders);
-      console.log('Request Body:', JSON.stringify(requestBody));
-      console.log('Response Status:', statusCode, response.statusText);
-      console.log('Response Headers:', responseHeaders);
-      console.log('Response Body:', responseText);
-      console.log('==========================================');
-    }
+
 
     // 分析响应并返回结果
     return this.analyzeResponse(statusCode, responseText, debugInfo);

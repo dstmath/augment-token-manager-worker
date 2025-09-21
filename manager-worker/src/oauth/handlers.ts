@@ -44,11 +44,7 @@ export class OAuthHandlers {
       // Store OAuth state in KV
       await this.storage.storeOAuthState(oauthState.state, oauthState);
       
-      console.log('OAuth authorization URL generated:', {
-        state: oauthState.state,
-        authUrl: authUrl.substring(0, 100) + '...',
-        redirectUri
-      });
+
 
       return createSuccessResponse({
         auth_url: authUrl,
@@ -120,11 +116,7 @@ export class OAuthHandlers {
       // Clean up stored state
       await this.storage.deleteOAuthState(state);
 
-      console.log('OAuth callback processed successfully:', {
-        state,
-        tenantUrl: result.tenant_url,
-        hasToken: !!result.access_token
-      });
+
 
       return createSuccessResponse({
         access_token: result.access_token,
@@ -183,11 +175,7 @@ export class OAuthHandlers {
       // Clean up stored state
       await this.storage.deleteOAuthState(state);
 
-      console.log('Token exchange completed:', {
-        state,
-        tenantUrl: result.tenant_url,
-        hasToken: !!result.access_token
-      });
+
 
       return createSuccessResponse(result, 'Token exchange completed successfully');
 

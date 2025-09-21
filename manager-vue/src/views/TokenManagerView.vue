@@ -634,7 +634,6 @@
                               type="checkbox"
                               v-model="autoRefreshVerificationCode"
                               @change="toggleAutoRefresh"
-                              :disabled="!generatedEmail"
                               style="margin: 0; flex-shrink: 0;"
                             >
                             <label class="form-check-label small mb-0" style="line-height: 1; margin: 0;">
@@ -667,7 +666,7 @@
                             type="button"
                             class="btn btn-primary"
                             @click="getVerificationCode"
-                            :disabled="isGettingVerificationCode || !generatedEmail"
+                            :disabled="isGettingVerificationCode"
                             title="获取验证码"
                           >
                             <i :class="['bi', isGettingVerificationCode ? 'bi-arrow-clockwise refresh-spin' : 'bi-arrow-clockwise']"></i>
@@ -2873,7 +2872,13 @@ const refreshToken = async (token: Token) => {
     const data = await response.json()
 
     if (data.success) {
-      // 更新本地Token数据
+      // 更新全部Token数据缓存
+      const allIndex = allTokens.value.findIndex(t => t.id === token.id)
+      if (allIndex > -1) {
+        allTokens.value[allIndex] = data.data
+      }
+
+      // 更新当前页显示的Token数据
       const index = tokens.value.findIndex(t => t.id === token.id)
       if (index > -1) {
         tokens.value[index] = data.data
@@ -2950,7 +2955,13 @@ const updateToken = async () => {
     const data = await response.json()
 
     if (data.success) {
-      // 更新本地数据
+      // 更新全部Token数据缓存
+      const allIndex = allTokens.value.findIndex(t => t.id === editingToken.value.id)
+      if (allIndex > -1) {
+        allTokens.value[allIndex] = data.data
+      }
+
+      // 更新当前页显示的Token数据
       const index = tokens.value.findIndex(t => t.id === editingToken.value.id)
       if (index > -1) {
         tokens.value[index] = data.data
@@ -2988,7 +2999,13 @@ const confirmDelete = async () => {
     const data = await response.json()
 
     if (data.success) {
-      // 从本地数据中移除
+      // 从全部Token数据缓存中移除
+      const allIndex = allTokens.value.findIndex(t => t.id === deletingToken.value!.id)
+      if (allIndex > -1) {
+        allTokens.value.splice(allIndex, 1)
+      }
+
+      // 从当前页显示的Token数据中移除
       const index = tokens.value.findIndex(t => t.id === deletingToken.value!.id)
       if (index > -1) {
         tokens.value.splice(index, 1)
@@ -3062,7 +3079,13 @@ const confirmValidateToken = async () => {
     const data = await response.json()
 
     if (data.success) {
-      // 更新本地Token数据
+      // 更新全部Token数据缓存
+      const allIndex = allTokens.value.findIndex(t => t.id === tokenToValidate.id)
+      if (allIndex > -1) {
+        allTokens.value[allIndex] = data.data
+      }
+
+      // 更新当前页显示的Token数据
       const index = tokens.value.findIndex(t => t.id === tokenToValidate.id)
       if (index > -1) {
         tokens.value[index] = data.data
@@ -3121,8 +3144,15 @@ const confirmBatchValidate = async () => {
     if (data.success && data.data.results) {
       // 处理批量验证结果
       for (const result of data.data.results) {
-        // 更新本地Token数据
+        // 更新Token数据
         if (result.token) {
+          // 更新全部Token数据缓存
+          const allIndex = allTokens.value.findIndex(t => t.id === result.tokenId)
+          if (allIndex > -1) {
+            allTokens.value[allIndex] = result.token
+          }
+
+          // 更新当前页显示的Token数据
           const index = tokens.value.findIndex(t => t.id === result.tokenId)
           if (index > -1) {
             tokens.value[index] = result.token
@@ -3182,7 +3212,13 @@ const fallbackIndividualValidation = async (validatableTokens) => {
       const data = await response.json()
 
       if (data.success) {
-        // 更新本地Token数据
+        // 更新全部Token数据缓存
+        const allIndex = allTokens.value.findIndex(t => t.id === token.id)
+        if (allIndex > -1) {
+          allTokens.value[allIndex] = data.data
+        }
+
+        // 更新当前页显示的Token数据
         const index = tokens.value.findIndex(t => t.id === token.id)
         if (index > -1) {
           tokens.value[index] = data.data
@@ -3248,7 +3284,13 @@ const confirmBatchRefresh = async () => {
       const data = await response.json()
 
       if (data.success) {
-        // 更新本地Token数据
+        // 更新全部Token数据缓存
+        const allIndex = allTokens.value.findIndex(t => t.id === token.id)
+        if (allIndex > -1 && data.data) {
+          allTokens.value[allIndex] = { ...allTokens.value[allIndex], ...data.data }
+        }
+
+        // 更新当前页显示的Token数据
         const index = tokens.value.findIndex(t => t.id === token.id)
         if (index > -1 && data.data) {
           tokens.value[index] = { ...tokens.value[index], ...data.data }
@@ -3353,7 +3395,7 @@ const generateEmail = async () => {
 const getVerificationCode = async (isAutoRefresh = false) => {
   if (!generatedEmail.value) {
     if (!isAutoRefresh) {
-      toast.error('请先生成邮箱')
+      toast.warning('请先生成邮箱或输入邮箱地址')
     }
     return false
   }

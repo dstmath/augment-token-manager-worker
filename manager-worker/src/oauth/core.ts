@@ -129,13 +129,7 @@ export class OAuthCore {
       code: code
     };
 
-    console.log('OAuth token exchange request:', {
-      url: tokenUrl,
-      clientId: this.config.clientId,
-      codeLength: code?.length || 0,
-      verifierLength: codeVerifier?.length || 0,
-      requestBody
-    });
+
 
     const response = await fetch(tokenUrl, {
       method: 'POST',
