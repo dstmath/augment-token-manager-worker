@@ -13,10 +13,7 @@
 		"types": "wrangler types",
 		"typecheck": "wrangler types && tsc --noEmit",
 		"lint": "eslint src --ext .ts",
-		"format": "prettier --write src/**/*.ts",
-		"kv:create:dev": "wrangler kv:namespace create TOKENS_KV --preview && wrangler kv:namespace create SESSIONS_KV --preview",
-		"kv:create:prod": "wrangler kv:namespace create TOKENS_KV && wrangler kv:namespace create SESSIONS_KV",
-		"check-config": "node check-config.js"
+		"format": "prettier --write src/**/*.ts"
 	},
 	"dependencies": {
 	},
