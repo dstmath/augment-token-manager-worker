@@ -28,7 +28,6 @@ wrangler.toml.bak
 # Configuration files with sensitive data
 manager-worker/wrangler.toml
 manager-worker/wrangler-dev.toml
-manager-worker/wrangler.toml
 
 # IDE
 .vscode/

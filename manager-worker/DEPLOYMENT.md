@@ -108,7 +108,7 @@ wrangler analytics
 ## Environment Variables
 
 ### Required Configuration (set in wrangler.toml)
-- `USER_CREDENTIALS`: User credentials in format "admin:password"
+- `USER_CREDENTIALS`: User credentials (supports array format or string format)
 - `ALLOWED_ORIGINS`: Comma-separated list of allowed CORS origins
 - `SESSION_EXPIRES_IN`: Session expiration time (e.g., "24h")
 - `RATE_LIMIT_LOGIN`: Login attempts per minute
@@ -134,7 +134,7 @@ wrangler analytics
    - Verify protocol (http/https) matches
 
 3. **Authentication Failures**
-   - Verify USER_CREDENTIALS format is correct (username:password)
+   - Verify USER_CREDENTIALS format is correct (array format recommended)
    - Check session expiration settings
 
 4. **Rate Limiting**
