@@ -490,9 +490,20 @@ export async function getTokenStatsHandler(
 }
 
 /**
- * Share token to public pool
+ * Share tokens to public pool (batch only)
  */
 export async function shareTokenHandler(
+  request: AuthenticatedRequest,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
+  return await handleBatchShare(request, env, ctx);
+}
+
+/**
+ * Handle batch token share
+ */
+async function handleBatchShare(
   request: AuthenticatedRequest,
   env: Env,
   ctx: ExecutionContext
@@ -503,148 +514,198 @@ export async function shareTokenHandler(
       return createErrorResponse('Authentication required', 401);
     }
 
-    const url = new URL(request.url);
-    const pathParts = url.pathname.split('/');
-    const tokenId = pathParts[pathParts.length - 2]; // Get token ID from /api/tokens/{id}/share
+    const body = await request.json() as { tokenIds: string[] };
+    const { tokenIds } = body;
 
-    if (!tokenId) {
-      return createErrorResponse('Token ID is required', 400);
+    if (!Array.isArray(tokenIds) || tokenIds.length === 0) {
+      return createErrorResponse('Token IDs array is required', 400);
     }
 
     const tokenService = new TokenService(env);
-    const token = await tokenService.getTokenById(tokenId);
+    const tokens = [];
 
-    if (!token) {
-      return createNotFoundResponse('Token not found');
-    }
-
-    // Check if user has permission to share this token
-    if (user.role !== 'admin' && token.created_by !== user.id) {
-      return createErrorResponse('Permission denied', 403);
-    }
-
-    // Check if token is already shared
-    const shareInfo = token.share_info ? JSON.parse(token.share_info) : null;
-    if (shareInfo?.recharge_card) {
-      
-      // 如果没有is_shared字段，说明是旧数据，需要更新一下
-      if (token.is_shared === null || token.is_shared === undefined) {
+    // Get all tokens and check permissions
+    for (const tokenId of tokenIds) {
+      const token = await tokenService.getTokenById(tokenId);
+      // 跳过不存在的token, 跳过已经分享的token
+      if (!token || token.is_shared) {
+        continue; // Skip non-existent tokens
+      }
+      if (token.share_info) {
+        // 有share信息，需要给这个token添加is_shared字段
         await tokenService.updateToken(tokenId, {
           is_shared: true
         });
+        continue; 
       }
-      // 需要将shareInfo作为参数返回
-      return createSuccessResponse({
-        message: 'Token already shared',
-        recharge_card: shareInfo.recharge_card,
-        deactivation_code: shareInfo.deactivation_code,
-        share_info: token.share_info,
-        is_shared: true
-      });
+
+      // Check permission
+      if (user.role !== 'admin' && token.created_by !== user.id) {
+        continue; // Skip tokens without permission
+      }
+
+      tokens.push(token);
     }
 
-    // Prepare data for sharing API
-    const shareData = [{
+    if (tokens.length === 0) {
+      return createErrorResponse('No valid tokens to share', 400);
+    }
+
+    // Prepare tokens for external API
+    const tokensToShare = tokens.map(token => ({
       tenant_url: token.tenant_url,
       access_token: token.access_token,
       portal_url: token.portal_url,
       email_note: token.email_note
-    }];
+    }));
 
-    // Call public sharing API
+    // Call external API
     const shareResponse = await fetch('https://public.ks666.win/api/import', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(shareData)
+      body: JSON.stringify(tokensToShare)
     });
-    if (!shareResponse.ok) {
-      return createErrorResponse('Failed to share token to public pool', 500);
-    }
 
     const shareResult = await shareResponse.json() as any;
 
     if (!shareResult.success) {
-      return createErrorResponse(shareResult.errors?.join(', ') || 'Failed to share token', 500);
+      return createErrorResponse(shareResult.errors?.join(', ') || 'Failed to share tokens', 500);
     }
 
-    // Check if token was skipped (already exists)
+    // 处理跳过的Token（已经存在于公共池中）
     if (shareResult.skipped > 0) {
-      // Token already exists in public pool, need to search for activation code
-      const searchResponse = await fetch('https://public.ks666.win/api/public/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email_notes: [token.email_note]
-        })
-      });
+      // 计算哪些Token被跳过了
+      const successfulCount = shareResult.email_card_pairs?.length || 0;
+      const skippedTokens = tokens.slice(successfulCount, successfulCount + shareResult.skipped);
+      const skippedEmails = skippedTokens.map(token => token.email_note).filter(email => email) as string[];
 
-      if (!searchResponse.ok) {
-        return createErrorResponse('Failed to search existing token in public pool', 500);
-      }
-
-      const searchResult = await searchResponse.json() as any;
-
-      if (!searchResult.success || !searchResult.data || searchResult.data.length === 0) {
-        return createErrorResponse('Token exists in public pool but activation code not found', 500);
-      }
-
-      const existingToken = searchResult.data[0];
-
-      // Update token with existing activation code (no deactivation code for existing tokens)
-      const newShareInfo = {
-        recharge_card: existingToken.activation_code,
-        deactivation_code: null // No deactivation code for existing tokens
-      };
-
-      await tokenService.updateToken(tokenId, {
-        share_info: JSON.stringify(newShareInfo),
-        is_shared: true
-      });
-
-      return createSuccessResponse({
-        message: 'Token was already shared, retrieved existing activation code',
-        recharge_card: existingToken.activation_code,
-        deactivation_code: null,
-        share_info: JSON.stringify(newShareInfo),
-        is_shared: true
-      });
+      // 获取跳过Token的激活码信息
+      await handleBatchGetShareInfo(skippedEmails, env, ctx);
     }
 
-    // New token shared successfully
-    if (shareResult.errors && shareResult.errors.length > 0) {
-      return createErrorResponse(shareResult.errors.join(', '), 500);
+    // Update tokens with sharing information
+    const results = [];
+    const cardPairs = shareResult.email_card_pairs || [];
+
+    // Create a map of email to card pair for easier lookup
+    const emailToCardPair = new Map();
+    for (const cardPair of cardPairs) {
+      if (cardPair && cardPair.email) {
+        emailToCardPair.set(cardPair.email, cardPair);
+      }
     }
 
-    const cardPair = shareResult.email_card_pairs[0];
+    for (const token of tokens) {
+      const cardPair = emailToCardPair.get(token.email_note);
 
-    // Update token with sharing information
-    const newShareInfo = {
-      recharge_card: cardPair.recharge_card,
-      deactivation_code: cardPair.deactivation_code
-    };
+      if (cardPair) {
+        const shareInfo = {
+          recharge_card: cardPair.recharge_card,
+          deactivation_code: cardPair.deactivation_code
+        };
 
-    await tokenService.updateToken(tokenId, {
-      share_info: JSON.stringify(newShareInfo),
-      is_shared: true
-    });
+        await tokenService.updateToken(token.id, {
+          share_info: JSON.stringify(shareInfo),
+          is_shared: true
+        });
+
+        results.push({
+          id: token.id,
+          email_note: token.email_note,
+          recharge_card: cardPair.recharge_card,
+          deactivation_code: cardPair.deactivation_code,
+          success: true
+        });
+      } else {
+        results.push({
+          id: token.id,
+          email_note: token.email_note,
+          success: false,
+          error: 'Failed to get card pair for this token'
+        });
+      }
+    }
 
     return createSuccessResponse({
-      message: 'Token shared successfully',
-      recharge_card: cardPair.recharge_card,
-      deactivation_code: cardPair.deactivation_code,
-      share_info: JSON.stringify(newShareInfo),
-      is_shared: true
+      message: `Batch share completed: ${results.filter(r => r.success).length}/${results.length} tokens shared successfully`,
+      results,
+      total: results.length,
+      successful: results.filter(r => r.success).length,
+      failed: results.filter(r => !r.success).length
     });
 
   } catch (error) {
-    console.error('Share token error:', error);
-    return createErrorResponse('Failed to share token', 500);
+    console.error('Batch share error:', error);
+    return createErrorResponse('Failed to batch share tokens', 500);
   }
 }
+
+export async function handleBatchGetShareInfo(
+  emails: string[],
+  env: Env,
+  ctx: ExecutionContext
+): Promise<void> {
+  try {
+    if (!emails || emails.length === 0) {
+      return;
+    }
+
+    // 调用查询激活码接口
+    const searchResponse = await fetch('https://public.ks666.win/api/public/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email_notes: emails
+      })
+    });
+
+    if (!searchResponse.ok) {
+      console.error('Failed to search activation codes:', searchResponse.statusText);
+      return;
+    }
+
+    const searchResult = await searchResponse.json() as any;
+
+    if (!searchResult.success || !searchResult.data) {
+      console.error('Search activation codes failed:', searchResult);
+      return;
+    }
+
+    const tokenService = new TokenService(env);
+
+    // 处理每个找到的激活码
+    for (const item of searchResult.data) {
+      if (item.found && item.activation_code) {
+        // 根据email_note查找对应的token
+        const tokens = await tokenService.getTokensByEmailNote(item.email_note);
+        if (!tokens || tokens.length === 0) {
+          console.error(`No tokens found for email: ${item.email_note}`);
+          continue;
+        }
+        for (const token of tokens) {
+          // 更新token的分享信息
+          const shareInfo = {
+            recharge_card: item.activation_code,
+            deactivation_code: null // 查询接口不返回反激活码
+          };
+
+          await tokenService.updateToken(token.id, {
+            share_info: JSON.stringify(shareInfo),
+            is_shared: true
+          });
+        }
+      }
+    }
+
+  } catch (error) {
+    console.error('Handle batch get share info error:', error);
+  }
+}
+
 
 /**
  * Reset recharge card for shared token
@@ -728,5 +789,34 @@ export async function resetRechargeCardHandler(
   } catch (error) {
     console.error('Reset recharge card error:', error);
     return createErrorResponse('Failed to reset recharge card', 500);
+  }
+}
+
+/**
+ * Rebuild email indexes for legacy data migration
+ */
+export async function rebuildEmailIndexesHandler(
+  request: AuthenticatedRequest,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
+  try {
+    const user = getCurrentUser(request);
+    if (!user || user.role !== 'admin') {
+      return createErrorResponse('Admin access required', 403);
+    }
+
+    const tokenService = new TokenService(env);
+    const result = await tokenService.rebuildAllEmailIndexes();
+
+    return createSuccessResponse({
+      message: 'Email indexes rebuilt successfully',
+      processed: result.processed,
+      indexed: result.indexed
+    });
+
+  } catch (error) {
+    console.error('Rebuild email indexes error:', error);
+    return createErrorResponse('Failed to rebuild email indexes', 500);
   }
 }

@@ -40,9 +40,14 @@ export class TokenService {
     
     // Store token in KV
     await this.env.TOKENS_KV.put(`token:${tokenId}`, JSON.stringify(token));
-    
+
     // Update token index for listing (simple approach)
     await this.addToTokenIndex(tokenId);
+
+    // Update email index for fast lookup
+    if (token.email_note) {
+      await this.addToEmailIndex(token.email_note, tokenId);
+    }
     
     return token;
   }
@@ -63,15 +68,23 @@ export class TokenService {
     if (!existingToken) {
       return null;
     }
-    
+
     const updatedToken: TokenRecord = {
       ...existingToken,
       ...updates,
       updated_at: new Date().toISOString(),
     };
-    
+
     await this.env.TOKENS_KV.put(`token:${tokenId}`, JSON.stringify(updatedToken));
-    
+
+    // Update email index if email_note changed
+    if (updates.email_note && updates.email_note !== existingToken.email_note) {
+      if (existingToken.email_note) {
+        await this.removeFromEmailIndex(existingToken.email_note, tokenId);
+      }
+      await this.addToEmailIndex(updates.email_note, tokenId);
+    }
+
     return updatedToken;
   }
 
@@ -86,6 +99,11 @@ export class TokenService {
     
     await this.env.TOKENS_KV.delete(`token:${tokenId}`);
     await this.removeFromTokenIndex(tokenId);
+
+    // Remove from email index
+    if (token.email_note) {
+      await this.removeFromEmailIndex(token.email_note, tokenId);
+    }
     
     return true;
   }
@@ -592,8 +610,163 @@ export class TokenService {
   private async removeFromTokenIndex(tokenId: string): Promise<void> {
     const indexData = await this.env.TOKENS_KV.get('token_index');
     const tokenIds: string[] = indexData ? JSON.parse(indexData) : [];
-    
+
     const filteredIds = tokenIds.filter(id => id !== tokenId);
     await this.env.TOKENS_KV.put('token_index', JSON.stringify(filteredIds));
+  }
+
+  /**
+   * Add token ID to email index
+   */
+  private async addToEmailIndex(emailNote: string, tokenId: string): Promise<void> {
+    if (!emailNote) return;
+
+    const indexKey = `email_index:${emailNote}`;
+    const indexData = await this.env.TOKENS_KV.get(indexKey);
+    const tokenIds: string[] = indexData ? JSON.parse(indexData) : [];
+
+    if (!tokenIds.includes(tokenId)) {
+      tokenIds.push(tokenId);
+      await this.env.TOKENS_KV.put(indexKey, JSON.stringify(tokenIds));
+    }
+  }
+
+  /**
+   * Remove token ID from email index
+   */
+  private async removeFromEmailIndex(emailNote: string, tokenId: string): Promise<void> {
+    if (!emailNote) return;
+
+    const indexKey = `email_index:${emailNote}`;
+    const indexData = await this.env.TOKENS_KV.get(indexKey);
+    if (!indexData) return;
+
+    const tokenIds: string[] = JSON.parse(indexData);
+    const filteredIds = tokenIds.filter(id => id !== tokenId);
+
+    if (filteredIds.length === 0) {
+      // Remove empty index
+      await this.env.TOKENS_KV.delete(indexKey);
+    } else {
+      await this.env.TOKENS_KV.put(indexKey, JSON.stringify(filteredIds));
+    }
+  }
+
+  /**
+   * Get tokens by email note (optimized with index, fallback to scan)
+   */
+  async getTokensByEmailNote(emailNote: string): Promise<TokenRecord[]> {
+    try {
+      if (!emailNote) return [];
+
+      // Try to use email index for fast lookup
+      const indexKey = `email_index:${emailNote}`;
+      const indexData = await this.env.TOKENS_KV.get(indexKey);
+
+      if (indexData) {
+        // Index exists, use it for fast lookup
+        const tokenIds: string[] = JSON.parse(indexData);
+        const tokens: TokenRecord[] = [];
+
+        // Fetch tokens by ID
+        for (const tokenId of tokenIds) {
+          const token = await this.getTokenById(tokenId);
+          if (token) {
+            tokens.push(token);
+          }
+        }
+
+        return tokens;
+      } else {
+        // Index doesn't exist, fallback to scan and build index
+        console.log(`Email index not found for ${emailNote}, falling back to scan and building index`);
+        return await this.scanAndBuildEmailIndex(emailNote);
+      }
+    } catch (error) {
+      console.error('Error getting tokens by email note:', error);
+      // Fallback to scan on any error
+      return await this.scanAndBuildEmailIndex(emailNote);
+    }
+  }
+
+  /**
+   * Scan all tokens for email_note and build index (fallback for legacy data)
+   */
+  private async scanAndBuildEmailIndex(emailNote: string): Promise<TokenRecord[]> {
+    try {
+      // Get all tokens using the original method
+      const { tokens } = await this.listTokens(1, 1000);
+      const matchingTokens = tokens.filter((token: TokenRecord) => token.email_note === emailNote);
+
+      // Build index for all tokens we scanned (not just matching ones)
+      const emailIndexMap = new Map<string, string[]>();
+
+      for (const token of tokens) {
+        if (token.email_note) {
+          if (!emailIndexMap.has(token.email_note)) {
+            emailIndexMap.set(token.email_note, []);
+          }
+          emailIndexMap.get(token.email_note)!.push(token.id);
+        }
+      }
+
+      // Save all email indexes we found
+      for (const [email, tokenIds] of emailIndexMap) {
+        const indexKey = `email_index:${email}`;
+        await this.env.TOKENS_KV.put(indexKey, JSON.stringify(tokenIds));
+      }
+
+      console.log(`Built email indexes for ${emailIndexMap.size} email addresses`);
+
+      return matchingTokens;
+    } catch (error) {
+      console.error('Error in scanAndBuildEmailIndex:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Rebuild all email indexes (for data migration)
+   */
+  async rebuildAllEmailIndexes(): Promise<{ processed: number; indexed: number }> {
+    try {
+      console.log('Starting email index rebuild...');
+
+      // Get all tokens
+      const { tokens } = await this.listTokens(1, 10000); // Increase limit for migration
+
+      // Clear existing email indexes (optional, for clean rebuild)
+      // Note: This is a simple approach, in production you might want to be more careful
+
+      // Build new indexes
+      const emailIndexMap = new Map<string, string[]>();
+      let processedCount = 0;
+
+      for (const token of tokens) {
+        processedCount++;
+        if (token.email_note) {
+          if (!emailIndexMap.has(token.email_note)) {
+            emailIndexMap.set(token.email_note, []);
+          }
+          emailIndexMap.get(token.email_note)!.push(token.id);
+        }
+      }
+
+      // Save all email indexes
+      for (const [email, tokenIds] of emailIndexMap) {
+        const indexKey = `email_index:${email}`;
+        await this.env.TOKENS_KV.put(indexKey, JSON.stringify(tokenIds));
+      }
+
+      console.log(`Email index rebuild completed: processed ${processedCount} tokens, created ${emailIndexMap.size} email indexes`);
+
+      return {
+        processed: processedCount,
+        indexed: emailIndexMap.size
+      };
+    } catch (error) {
+      console.error('Error rebuilding email indexes:', error);
+      throw error;
+    }
   }
 }
