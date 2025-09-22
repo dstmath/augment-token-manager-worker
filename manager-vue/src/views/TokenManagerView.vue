@@ -28,30 +28,48 @@
                   <i class="bi bi-table"></i>
                 </button>
               </div>
-              <button @click="validateAllTokens" class="btn btn-warning" title="验证 Token">
-                <i class="bi bi-check-circle me-sm-2"></i>
-                <span class="d-none d-sm-inline">验证 Token</span>
+              <button
+                @click="toggleSelectMode"
+                :class="['btn', isSelectMode ? 'btn-primary' : 'btn-outline-primary']"
+                :title="isSelectMode ? '退出选择模式' : '进入选择模式'"
+              >
+                <i :class="['bi', 'me-sm-2', isSelectMode ? 'bi-check-square' : 'bi-square']"></i>
+                <span class="d-none d-sm-inline">{{ isSelectMode ? '退出选择' : '批量选择' }}</span>
               </button>
               <button
-                @click="showBatchRefreshConfirm"
+                @click="validateSelectedTokens"
+                class="btn btn-warning"
+                :disabled="!isSelectMode || selectedTokenIds.size === 0"
+                :title="isSelectMode ? `验证选中的 ${selectedTokenIds.size} 个Token` : '请先进入选择模式'"
+              >
+                <i class="bi bi-check-circle me-sm-2"></i>
+                <span class="d-none d-sm-inline">
+                  {{ isSelectMode && selectedTokenIds.size > 0 ? `验证 (${selectedTokenIds.size})` : '验证' }}
+                </span>
+              </button>
+              <button
+                @click="refreshSelectedTokens"
                 class="btn btn-secondary"
-                :disabled="isBatchRefreshing"
-                :title="isBatchRefreshing ? '刷新中...' : '全部刷新'"
+                :disabled="!isSelectMode || selectedTokenIds.size === 0 || isBatchRefreshing"
+                :title="isSelectMode ? `刷新选中的 ${selectedTokenIds.size} 个Token` : '请先进入选择模式'"
               >
                 <i
                   :class="['bi', 'me-sm-2',
                     isBatchRefreshing ? 'bi-arrow-clockwise refresh-spin' : 'bi-arrow-clockwise']"
                   :style="isBatchRefreshing ? 'animation: refresh-rotate 1s linear infinite; transform-origin: center center; display: inline-block;' : ''"
                 ></i>
-                <span class="d-none d-sm-inline">{{ isBatchRefreshing ? '刷新中...' : '全部刷新' }}</span>
+                <span class="d-none d-sm-inline">
+                  {{ isBatchRefreshing ? '刷新中...' :
+                     (isSelectMode && selectedTokenIds.size > 0 ? `刷新 (${selectedTokenIds.size})` : '刷新') }}
+                </span>
               </button>
-              <button @click="() => showGetTokenModal(false)" class="btn btn-success" title="获取 Token">
+              <button @click="() => showGetTokenModal(false)" class="btn btn-success" title="添加 Token">
                 <i class="bi bi-link-45deg me-sm-2"></i>
-                <span class="d-none d-sm-inline">获取 Token</span>
+                <span class="d-none d-sm-inline">添加</span>
               </button>
-              <button @click="showAddTokenModal" class="btn btn-info" title="添加 Token">
+              <button @click="showAddTokenModal" class="btn btn-info" title="导入 Token">
                 <i class="bi bi-plus-circle me-sm-2"></i>
-                <span class="d-none d-sm-inline">添加 Token</span>
+                <span class="d-none d-sm-inline">导入</span>
               </button>
             </div>
           </div>
@@ -168,8 +186,18 @@
         <!-- 卡片视图 -->
         <div v-if="viewMode === 'card'" class="row row-cards">
           <div v-for="token in tokens" :key="token.id" class="col-sm-6 col-lg-4">
-            <div class="card">
+            <div :class="['card', { 'border-primary': isSelectMode && selectedTokenIds.has(token.id) }]">
               <div class="card-body">
+                <!-- 选择模式下的复选框 -->
+                <div v-if="isSelectMode" class="position-absolute" style="top: 10px; left: 10px; z-index: 10;">
+                  <input
+                    type="checkbox"
+                    class="form-check-input"
+                    :checked="selectedTokenIds.has(token.id)"
+                    @change="toggleTokenSelection(token.id)"
+                  />
+                </div>
+
                 <!-- 卡片头部 -->
                 <div class="d-flex align-items-center mb-3">
                   <div class="flex-fill">
@@ -236,13 +264,22 @@
 
         <!-- 表格视图 -->
         <div v-if="viewMode === 'table'" class="card">
-          <div class="table-responsive">
-            <table class="table table-vcenter card-table">
+          <div class="table-responsive" style="border-radius: 0.5rem; overflow: hidden;">
+            <table class="table table-vcenter card-table" style="margin-bottom: 0;">
               <thead>
                 <tr>
+                  <th v-if="isSelectMode" class="text-center" style="width: 50px;">
+                    <input
+                      type="checkbox"
+                      class="form-check-input"
+                      :checked="isAllSelected"
+                      @change="toggleSelectAll"
+                      title="全选/取消全选"
+                    />
+                  </th>
                   <th>邮箱备注</th>
                   <th
-                    class="sortable-header"
+                    class="sortable-header text-center"
                     @click="sortTokens('expiry_date')"
                     :class="{ 'sorted': sortField === 'expiry_date' }"
                   >
@@ -253,9 +290,9 @@
                     ></i>
                     <i v-else class="bi bi-arrow-up-down ms-1 text-muted"></i>
                   </th>
-                  <th>剩余时长</th>
+                  <th class="text-center">剩余时长</th>
                   <th
-                    class="sortable-header"
+                    class="sortable-header text-center"
                     @click="sortTokens('credits_balance')"
                     :class="{ 'sorted': sortField === 'credits_balance' }"
                   >
@@ -266,23 +303,31 @@
                     ></i>
                     <i v-else class="bi bi-arrow-up-down ms-1 text-muted"></i>
                   </th>
-                  <th>状态</th>
-                  <th class="w-1">操作</th>
+                  <th class="text-center">状态</th>
+                  <th class="w-1 text-center">操作</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="token in tokens" :key="token.id">
+                  <td v-if="isSelectMode" class="text-center">
+                    <input
+                      type="checkbox"
+                      class="form-check-input"
+                      :checked="selectedTokenIds.has(token.id)"
+                      @change="toggleTokenSelection(token.id)"
+                    />
+                  </td>
                   <td class="text-muted">{{ token.email_note || '未设置备注' }}</td>
-                  <td :class="getDaysColorClass(token)">
+                  <td :class="['text-center', getDaysColorClass(token)]">
                     {{ getExpiryDate(token) }}
                   </td>
-                  <td :class="getDaysColorClass(token)">
+                  <td :class="['text-center', getDaysColorClass(token)]">
                     {{ formatRemainingTime(token) }}
                   </td>
-                  <td :class="getCreditsColorClass(token)">
+                  <td :class="['text-center', getCreditsColorClass(token)]">
                     {{ getRemainingCredits(token) }}
                   </td>
-                  <td>
+                  <td class="text-center">
                     <span
                       :class="['badge', 'cursor-pointer',
                         isValidating && validatingToken?.id === token.id ? 'bg-warning text-white' :
@@ -1109,7 +1154,10 @@
             </div>
             <div class="text-muted small">
               <strong>将要验证：</strong>{{ batchValidateResults.total }} 个Token
-              <template v-if="activeFilter">
+              <template v-if="isSelectMode">
+                <span class="badge text-bg-primary ms-2">选中的Token</span>
+              </template>
+              <template v-else-if="activeFilter">
                 <span class="badge text-bg-primary ms-2">{{ activeFilter }}</span>
               </template>
               <template v-else>
@@ -1172,8 +1220,11 @@
               </div>
             </div>
             <div class="text-muted small">
-              <strong>将要刷新：</strong>{{ tokens.length }} 个Token
-              <template v-if="activeFilter">
+              <strong>将要刷新：</strong>{{ isSelectMode ? selectedTokenIds.size : batchRefreshResults.total }} 个Token
+              <template v-if="isSelectMode">
+                <span class="badge text-bg-primary ms-2">选中的Token</span>
+              </template>
+              <template v-else-if="activeFilter">
                 <span class="badge text-bg-primary ms-2">{{ activeFilter }}</span>
               </template>
               <template v-else>
@@ -1224,7 +1275,7 @@
       <div class="modal-dialog modal-lg modal-dialog-centered" role="document" @click.stop>
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title">添加 Token</h5>
+            <h5 class="modal-title">导入 Token</h5>
             <button type="button" class="btn-close" @click="closeAddModal"></button>
           </div>
           <div class="modal-body">
@@ -1571,6 +1622,10 @@ watch(viewMode, (newMode) => {
 // 排序状态管理 - 默认按过期时间升序排序
 const sortField = ref<string | null>('expiry_date')
 const sortOrder = ref<'asc' | 'desc'>('asc')
+
+// 批量选择状态管理
+const selectedTokenIds = ref<Set<string>>(new Set())
+const isSelectMode = ref(false)
 
 // 执行模态框状态
 const showExecuteModal = ref(false)
@@ -1925,6 +1980,29 @@ const sortTokens = (field: string) => {
 
 // Token比较函数
 const compareTokens = (a: Token, b: Token, field: string, order: 'asc' | 'desc'): number => {
+  // 获取token状态
+  const aStatus = getTokenStatus(a)
+  const bStatus = getTokenStatus(b)
+
+  // 定义状态优先级：(正常|失效) > 未知 > 不可用
+  const getStatusPriority = (status: string): number => {
+    if (status === '正常' || status === '失效') return 1
+    if (status === '未知') return 2
+    if (status === '不可用') return 3
+    return 4 // 其他状态
+  }
+
+  const aPriority = getStatusPriority(aStatus)
+  const bPriority = getStatusPriority(bStatus)
+
+  // 如果状态优先级不同，按优先级排序
+  if (aPriority !== bPriority) {
+    return aPriority - bPriority
+  }
+
+  // 如果都是不可用状态，保持原顺序（不排序）
+  if (aPriority === 3 && bPriority === 3) return 0
+
   let aValue: any
   let bValue: any
 
@@ -2337,6 +2415,87 @@ const formatDateTime = (date: Date): string => {
     minute: '2-digit',
     second: '2-digit'
   })
+}
+
+// 批量选择相关函数
+const toggleSelectMode = () => {
+  isSelectMode.value = !isSelectMode.value
+  if (!isSelectMode.value) {
+    selectedTokenIds.value.clear()
+  }
+}
+
+const toggleTokenSelection = (tokenId: string) => {
+  if (selectedTokenIds.value.has(tokenId)) {
+    selectedTokenIds.value.delete(tokenId)
+  } else {
+    selectedTokenIds.value.add(tokenId)
+  }
+}
+
+const toggleSelectAll = () => {
+  if (isAllSelected.value) {
+    selectedTokenIds.value.clear()
+  } else {
+    tokens.value.forEach(token => {
+      selectedTokenIds.value.add(token.id)
+    })
+  }
+}
+
+const isAllSelected = computed(() => {
+  return tokens.value.length > 0 && tokens.value.every(token => selectedTokenIds.value.has(token.id))
+})
+
+const validateSelectedTokens = () => {
+  if (selectedTokenIds.value.size === 0) {
+    toast.error('请先选择要验证的Token')
+    return
+  }
+
+  // 获取选中的token
+  const selectedTokens = tokens.value.filter(token => selectedTokenIds.value.has(token.id))
+
+  // 筛选出可以验证的Token（正常、未知和失效状态）
+  const validatableTokens = selectedTokens.filter(token => {
+    const status = getTokenStatus(token)
+    return status === '正常' || status === '未知' || status === '失效'
+  })
+
+  if (validatableTokens.length === 0) {
+    toast.info('选中的Token中没有可验证的（只有正常、未知和失效状态的Token可以验证）')
+    return
+  }
+
+  // 重置验证结果
+  batchValidateResults.value = {
+    valid: 0,
+    invalid: 0,
+    failed: 0,
+    total: validatableTokens.length
+  }
+
+  showBatchValidateModal.value = true
+}
+
+const refreshSelectedTokens = () => {
+  if (selectedTokenIds.value.size === 0) {
+    toast.error('请先选择要刷新的Token')
+    return
+  }
+
+  // 获取选中的token
+  const selectedTokens = tokens.value.filter(token => selectedTokenIds.value.has(token.id))
+
+  // 筛选出有portal_url的Token（只有这些Token可以刷新）
+  const refreshableTokens = selectedTokens.filter(token => token.portal_url && token.portal_url.trim() !== '')
+
+  if (refreshableTokens.length === 0) {
+    toast.info('选中的Token中没有可刷新的（只有设置了Portal URL的Token可以刷新）')
+    return
+  }
+
+  showBatchRefreshModal.value = true
 }
 
 const validateAllTokens = () => {
@@ -3120,8 +3279,13 @@ const closeBatchValidateModal = () => {
 const confirmBatchValidate = async () => {
   isBatchValidating.value = true
 
+  // 获取要验证的token（如果是选择模式，则只验证选中的token）
+  const tokensToValidate = isSelectMode.value
+    ? tokens.value.filter(token => selectedTokenIds.value.has(token.id))
+    : tokens.value
+
   // 筛选出可以验证的Token（正常、未知和失效状态）
-  const validatableTokens = tokens.value.filter(token => {
+  const validatableTokens = tokensToValidate.filter(token => {
     const status = getTokenStatus(token)
     return status === '正常' || status === '未知' || status === '失效'
   })
@@ -3190,6 +3354,10 @@ const confirmBatchValidate = async () => {
   // 延迟关闭模态框
   setTimeout(() => {
     closeBatchValidateModal()
+    // 如果是选择模式，操作完成后清除选择
+    if (isSelectMode.value) {
+      selectedTokenIds.value.clear()
+    }
   }, 2000)
 }
 
@@ -3264,8 +3432,13 @@ const closeBatchRefreshModal = () => {
 const confirmBatchRefresh = async () => {
   isBatchRefreshing.value = true
 
+  // 获取要刷新的token（如果是选择模式，则只刷新选中的token）
+  const tokensToRefresh = isSelectMode.value
+    ? tokens.value.filter(token => selectedTokenIds.value.has(token.id))
+    : tokens.value
+
   // 筛选出有portal_url的Token（只有这些Token可以刷新）
-  const refreshableTokens = tokens.value.filter(token => token.portal_url && token.portal_url.trim() !== '')
+  const refreshableTokens = tokensToRefresh.filter(token => token.portal_url && token.portal_url.trim() !== '')
 
   // 重置结果
   batchRefreshResults.value = {
@@ -3322,6 +3495,10 @@ const confirmBatchRefresh = async () => {
   // 延迟关闭模态框
   setTimeout(() => {
     closeBatchRefreshModal()
+    // 如果是选择模式，操作完成后清除选择
+    if (isSelectMode.value) {
+      selectedTokenIds.value.clear()
+    }
   }, 2000)
 }
 
@@ -3710,13 +3887,13 @@ i.refresh-spin {
 /* 应用卡片样式 */
 .app-card {
   transition: all 0.2s ease-in-out;
-  border: 1px solid var(--tblr-border-color);
+  border: 1px solid var(--bs-border-color);
 }
 
 .app-card:hover:not(.disabled) {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-color: var(--tblr-primary);
+  border-color: var(--bs-primary);
 }
 
 .app-card.disabled {
@@ -3743,7 +3920,7 @@ i.refresh-spin {
 .app-name {
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--tblr-dark);
+  color: var(--bs-body-color);
 }
 
 .step-active .step-number {
@@ -3827,6 +4004,18 @@ i.refresh-spin {
   }
 }
 
+/* 表格样式优化 */
+.table th {
+  border-top: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--bs-body-color);
+  background-color: var(--bs-body-bg);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
 /* 排序表头样式 */
 .sortable-header {
   cursor: pointer;
@@ -3835,11 +4024,11 @@ i.refresh-spin {
 }
 
 .sortable-header:hover {
-  background-color: var(--tblr-bg-surface-secondary);
+  background-color: var(--bs-secondary-bg);
 }
 
 .sortable-header.sorted {
-  background-color: var(--tblr-bg-surface-secondary);
+  background-color: var(--bs-secondary-bg);
   font-weight: 600;
 }
 
@@ -3850,7 +4039,7 @@ i.refresh-spin {
 
 .sortable-header.sorted i {
   opacity: 1;
-  color: var(--tblr-primary);
+  color: var(--bs-primary);
 }
 
 /* 中等屏幕优化 */

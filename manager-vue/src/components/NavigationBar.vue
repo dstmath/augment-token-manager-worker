@@ -75,6 +75,11 @@
           </div>
         </div>
 
+        <!-- 主题切换 -->
+        <div class="nav-item me-3">
+          <ThemeToggle />
+        </div>
+
         <!-- 用户信息 -->
         <div class="nav-item dropdown ms-4" ref="dropdownRef">
           <button
@@ -114,6 +119,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { toast } from '../utils/toast'
 import { apiGet } from '../utils/api'
+import ThemeToggle from './ThemeToggle.vue'
 
 
 // Token类型定义
@@ -354,20 +360,20 @@ const handleLogout = async () => {
 }
 
 .brand-icon {
-  color: var(--tblr-primary);
+  color: var(--bs-primary);
 }
 
 .brand-title {
   font-size: 1.25rem;
   font-weight: 700;
-  color: var(--tblr-dark);
+  color: var(--bs-body-color);
   line-height: 1.3;
   margin-bottom: 2px;
 }
 
 .brand-subtitle {
   font-size: 0.75rem;
-  color: var(--tblr-muted);
+  color: var(--bs-secondary-color);
   line-height: 1.2;
   margin-top: 0;
 }
@@ -379,7 +385,7 @@ const handleLogout = async () => {
 
 /* 导航菜单样式 */
 .nav-menu {
-  border-right: 1px solid var(--tblr-border-color);
+  border-right: 1px solid var(--bs-border-color);
   padding-right: 1rem;
   margin-right: 1rem;
   flex: 0 1 auto;
@@ -391,19 +397,19 @@ const handleLogout = async () => {
   padding: 0.5rem 1rem;
   margin: 0 0.25rem;
   border-radius: 0.375rem;
-  color: var(--tblr-muted);
+  color: var(--bs-secondary-color);
   text-decoration: none;
   transition: all 0.15s ease-in-out;
   font-weight: 500;
 }
 
 .nav-link:hover {
-  background-color: var(--tblr-primary-lt);
-  color: var(--tblr-primary);
+  background-color: var(--bs-primary-bg-subtle);
+  color: var(--bs-primary);
 }
 
 .nav-link.active {
-  background-color: var(--tblr-primary);
+  background-color: var(--bs-primary);
   color: white !important;
 }
 
@@ -431,13 +437,13 @@ const handleLogout = async () => {
 .user-name {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--tblr-dark);
+  color: var(--bs-body-color);
   line-height: 1.2;
 }
 
 .user-role {
   font-size: 0.75rem;
-  color: var(--tblr-muted);
+  color: var(--bs-secondary-color);
   line-height: 1;
 }
 
@@ -450,8 +456,8 @@ const handleLogout = async () => {
   min-width: 10rem;
   padding: 0.5rem 0;
   margin: 0.125rem 0 0;
-  background-color: #fff;
-  border: 1px solid var(--tblr-border-color);
+  background-color: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
   border-radius: 0.375rem;
   box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
 }
@@ -609,8 +615,8 @@ const handleLogout = async () => {
   right: 0;
   z-index: 1050;
   width: 320px;
-  background: white;
-  border: 1px solid var(--tblr-border-color);
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
   border-radius: 0.5rem;
   box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
   margin-top: 0.5rem;
@@ -632,17 +638,20 @@ const handleLogout = async () => {
   display: flex;
   align-items: center;
   padding: 0.75rem 1rem;
-  background: var(--tblr-bg-surface-secondary);
-  border-bottom: 1px solid var(--tblr-border-color);
+  background: var(--bs-secondary-bg);
+  border-bottom: 1px solid var(--bs-border-color);
   border-radius: 0.5rem 0.5rem 0 0;
   font-weight: 600;
   font-size: 0.875rem;
+  color: var(--bs-body-color);
 }
 
 .popover-body {
   padding: 1rem;
   max-height: 300px;
   overflow-y: auto;
+  background: var(--bs-body-bg);
+  color: var(--bs-body-color);
 }
 
 .alert-sm {
@@ -657,7 +666,7 @@ const handleLogout = async () => {
 
 .token-item {
   padding: 0.5rem 0;
-  border-bottom: 1px solid var(--tblr-border-color-light);
+  border-bottom: 1px solid var(--bs-border-color-translucent);
 }
 
 .token-item:last-child {
@@ -673,7 +682,7 @@ const handleLogout = async () => {
 .token-email {
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--tblr-dark);
+  color: var(--bs-body-color);
   flex: 1;
   margin-right: 0.5rem;
 }
@@ -684,7 +693,7 @@ const handleLogout = async () => {
 }
 
 .time-badge {
-  background: var(--tblr-danger);
+  background: var(--bs-danger);
   color: white;
   padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
@@ -693,7 +702,7 @@ const handleLogout = async () => {
 }
 
 .credits-badge {
-  background: var(--tblr-success);
+  background: var(--bs-success);
   color: white;
   padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
@@ -703,8 +712,8 @@ const handleLogout = async () => {
 
 .popover-footer {
   padding: 0.75rem 1rem;
-  border-top: 1px solid var(--tblr-border-color);
-  background: var(--tblr-bg-surface-secondary);
+  border-top: 1px solid var(--bs-border-color);
+  background: var(--bs-secondary-bg);
   border-radius: 0 0 0.5rem 0.5rem;
 }
 

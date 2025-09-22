@@ -18,40 +18,50 @@ html {
 
 body {
   min-height: 100vh;
-  color: #2c3e50;
-  background: #ffffff;
+  color: var(--bs-body-color, #2c3e50);
+  background: var(--bs-body-bg, #ffffff);
   transition: color 0.5s, background-color 0.5s;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
 }
 
-/* CSS Variables */
+/* Bootstrap 5 主题变量扩展 */
 :root {
-  --color-background: #ffffff;
-  --color-background-soft: #f8f9fa;
-  --color-background-mute: #f2f3f4;
+  /* 自定义颜色变量，映射到Bootstrap变量 */
+  --app-bg: var(--bs-body-bg, #ffffff);
+  --app-text: var(--bs-body-color, #212529);
+  --app-border: var(--bs-border-color, #dee2e6);
+  --app-surface: var(--bs-secondary-bg, #f8f9fa);
+  --app-surface-secondary: var(--bs-tertiary-bg, #f1f3f4);
 
-  --color-border: #ddd;
-  --color-border-hover: #999;
-
-  --color-heading: #2c3e50;
-  --color-text: #213547;
+  /* 兼容现有变量 */
+  --color-background: var(--app-bg);
+  --color-background-soft: var(--app-surface);
+  --color-background-mute: var(--app-surface-secondary);
+  --color-border: var(--app-border);
+  --color-border-hover: var(--bs-border-color-translucent, rgba(0, 0, 0, 0.175));
+  --color-heading: var(--app-text);
+  --color-text: var(--app-text);
 
   --section-gap: 160px;
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: #1a1a1a;
-    --color-background-soft: #242424;
-    --color-background-mute: #2f2f2f;
+/* 深色主题变量 */
+[data-bs-theme="dark"] {
+  /* 确保深色主题下的变量正确映射 */
+  --app-bg: var(--bs-body-bg);
+  --app-text: var(--bs-body-color);
+  --app-border: var(--bs-border-color);
+  --app-surface: var(--bs-secondary-bg);
+  --app-surface-secondary: var(--bs-tertiary-bg);
 
-    --color-border: #444;
-    --color-border-hover: #666;
-
-    --color-heading: #ffffff;
-    --color-text: rgba(255, 255, 255, 0.87);
-  }
+  /* 兼容现有变量 */
+  --color-background: var(--app-bg);
+  --color-background-soft: var(--app-surface);
+  --color-background-mute: var(--app-surface-secondary);
+  --color-border: var(--app-border);
+  --color-border-hover: var(--bs-border-color-translucent);
+  --color-heading: var(--app-text);
+  --color-text: var(--app-text);
 }
 
 /* Typography */
@@ -68,11 +78,12 @@ input, textarea, select, button {
 
 /* Links */
 a {
-  color: #007bff;
+  color: var(--bs-link-color, #007bff);
   text-decoration: none;
 }
 
 a:hover {
+  color: var(--bs-link-hover-color, #0056b3);
   text-decoration: underline;
 }
 

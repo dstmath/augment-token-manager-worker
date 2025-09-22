@@ -35,6 +35,7 @@ manager-worker/wrangler-dev.toml
 *.swp
 *.swo
 *~
+docs
 
 # OS
 .DS_Store

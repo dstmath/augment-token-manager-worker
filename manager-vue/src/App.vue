@@ -3,11 +3,15 @@ import { RouterView, useRoute } from 'vue-router'
 import { computed } from 'vue'
 import NavigationBar from './components/NavigationBar.vue'
 import ToastNotification from './components/ToastNotification.vue'
+import { useTheme } from './composables/useTheme'
 
 const route = useRoute()
 
 // 判断是否为登录页面
 const isLoginPage = computed(() => route.path === '/login')
+
+// 初始化主题系统
+useTheme()
 </script>
 
 <template>
@@ -26,12 +30,12 @@ const isLoginPage = computed(() => route.path === '/login')
         </div>
       </div>
       <!-- 版权信息 -->
-      <footer class="footer footer-transparent d-print-none" style="position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-top: 1px solid var(--tblr-border-color-light); padding: 0;">
-        <div class="container-xl" style="padding-top: 8px; padding-bottom: 8px;">
+      <footer class="footer footer-transparent d-print-none app-footer">
+        <div class="container-xl">
           <div class="text-center">
-            <span style="font-size: 0.75rem; color: var(--tblr-muted);">
-              &copy; 2025 qianshe. Powered by
-              <a href="https://github.com/KleinerSource/augment_token_manager_frontend" target="_blank" style="color: var(--tblr-primary); text-decoration: none;">KleinerSource</a>
+            <span class="footer-text">
+              &copy; 2025
+              <a href="https://github.com/qianshe/augment-token-manager-worker" target="_blank" class="footer-link">qianshe</a>
             </span>
           </div>
         </div>
@@ -44,5 +48,37 @@ const isLoginPage = computed(() => route.path === '/login')
 </template>
 
 <style scoped>
-/* 使用 Tabler 的默认样式，无需额外自定义 */
+/* 页脚主题适配样式 */
+.app-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--bs-body-bg, rgba(255, 255, 255, 0.95));
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--bs-border-color);
+  padding: 8px 0;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+[data-bs-theme="dark"] .app-footer {
+  background: var(--bs-body-bg, rgba(33, 37, 41, 0.95));
+}
+
+.footer-text {
+  font-size: 0.75rem;
+  color: var(--bs-secondary-color);
+}
+
+.footer-link {
+  color: var(--bs-link-color);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.footer-link:hover {
+  color: var(--bs-link-hover-color);
+  text-decoration: underline;
+}
 </style>

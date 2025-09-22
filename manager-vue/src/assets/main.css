@@ -3,9 +3,340 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background-color: var(--bs-body-bg);
+  color: var(--bs-body-color);
 }
 
 .main-content {
   flex: 1;
-  background-color: var(--tblr-bg-surface-secondary);
+  background-color: var(--bs-secondary-bg);
+}
+
+/* 主题切换过渡动画 */
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* 确保Bootstrap组件正确继承主题 */
+.navbar {
+  background-color: var(--bs-body-bg) !important;
+  border-color: var(--bs-border-color) !important;
+  color: var(--bs-body-color) !important;
+}
+
+.navbar .navbar-brand {
+  color: var(--bs-body-color) !important;
+}
+
+.card {
+  background-color: var(--bs-body-bg);
+  border-color: var(--bs-border-color);
+}
+
+.modal-content {
+  background-color: var(--bs-body-bg);
+  color: var(--bs-body-color);
+}
+
+.dropdown-menu {
+  background-color: var(--bs-body-bg);
+  border-color: var(--bs-border-color);
+}
+
+.form-control {
+  background-color: var(--bs-body-bg);
+  border-color: var(--bs-border-color);
+  color: var(--bs-body-color);
+}
+
+.form-control:focus {
+  background-color: var(--bs-body-bg);
+  border-color: var(--bs-primary);
+  color: var(--bs-body-color);
+}
+
+/* 按钮主题适配 */
+.btn {
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-primary {
+  --bs-btn-color: #fff;
+  --bs-btn-bg: var(--bs-primary);
+  --bs-btn-border-color: var(--bs-primary);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--bs-primary);
+  --bs-btn-hover-border-color: var(--bs-primary);
+  --bs-btn-focus-shadow-rgb: 49, 132, 253;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: var(--bs-primary);
+  --bs-btn-active-border-color: var(--bs-primary);
+}
+
+.btn-secondary {
+  --bs-btn-color: #fff;
+  --bs-btn-bg: var(--bs-secondary);
+  --bs-btn-border-color: var(--bs-secondary);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--bs-secondary);
+  --bs-btn-hover-border-color: var(--bs-secondary);
+  --bs-btn-focus-shadow-rgb: 130, 138, 145;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: var(--bs-secondary);
+  --bs-btn-active-border-color: var(--bs-secondary);
+}
+
+.btn-outline-secondary {
+  --bs-btn-color: var(--bs-secondary);
+  --bs-btn-border-color: var(--bs-secondary);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--bs-secondary);
+  --bs-btn-hover-border-color: var(--bs-secondary);
+  --bs-btn-focus-shadow-rgb: 130, 138, 145;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: var(--bs-secondary);
+  --bs-btn-active-border-color: var(--bs-secondary);
+}
+
+/* 深色主题下的按钮优化 - 使用动态CSS变量 */
+
+/* Primary按钮 - 使用动态主题色变量 */
+[data-bs-theme="dark"] .btn-primary {
+  --bs-btn-color: #fff;
+  --bs-btn-bg: var(--bs-primary);
+  --bs-btn-border-color: var(--bs-primary);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--bs-primary);
+  --bs-btn-hover-border-color: var(--bs-primary);
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: var(--bs-primary);
+  --bs-btn-active-border-color: var(--bs-primary);
+  opacity: 0.9;
+}
+
+[data-bs-theme="dark"] .btn-primary:hover {
+  opacity: 1;
+}
+
+/* Secondary按钮 - 使用动态主题色变量 */
+[data-bs-theme="dark"] .btn-secondary {
+  --bs-btn-color: #fff;
+  --bs-btn-bg: var(--bs-secondary);
+  --bs-btn-border-color: var(--bs-secondary);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--bs-secondary);
+  --bs-btn-hover-border-color: var(--bs-secondary);
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: var(--bs-secondary);
+  --bs-btn-active-border-color: var(--bs-secondary);
+  opacity: 0.9;
+}
+
+[data-bs-theme="dark"] .btn-secondary:hover {
+  opacity: 1;
+}
+
+/* Success按钮 - 使用动态主题色变量 */
+[data-bs-theme="dark"] .btn-success {
+  --bs-btn-color: #fff;
+  --bs-btn-bg: var(--bs-success);
+  --bs-btn-border-color: var(--bs-success);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--bs-success);
+  --bs-btn-hover-border-color: var(--bs-success);
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: var(--bs-success);
+  --bs-btn-active-border-color: var(--bs-success);
+  opacity: 0.9;
+}
+
+[data-bs-theme="dark"] .btn-success:hover {
+  opacity: 1;
+}
+
+/* Warning按钮 - 使用动态主题色变量 */
+[data-bs-theme="dark"] .btn-warning {
+  --bs-btn-color: #000;
+  --bs-btn-bg: var(--bs-warning);
+  --bs-btn-border-color: var(--bs-warning);
+  --bs-btn-hover-color: #000;
+  --bs-btn-hover-bg: var(--bs-warning);
+  --bs-btn-hover-border-color: var(--bs-warning);
+  --bs-btn-active-color: #000;
+  --bs-btn-active-bg: var(--bs-warning);
+  --bs-btn-active-border-color: var(--bs-warning);
+  opacity: 0.9;
+}
+
+[data-bs-theme="dark"] .btn-warning:hover {
+  opacity: 1;
+}
+
+/* Danger按钮 - 使用动态主题色变量 */
+[data-bs-theme="dark"] .btn-danger {
+  --bs-btn-color: #fff;
+  --bs-btn-bg: var(--bs-danger);
+  --bs-btn-border-color: var(--bs-danger);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--bs-danger);
+  --bs-btn-hover-border-color: var(--bs-danger);
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: var(--bs-danger);
+  --bs-btn-active-border-color: var(--bs-danger);
+  opacity: 0.9;
+}
+
+[data-bs-theme="dark"] .btn-danger:hover {
+  opacity: 1;
+}
+
+/* Info按钮 - 使用动态主题色变量 */
+[data-bs-theme="dark"] .btn-info {
+  --bs-btn-color: #000;
+  --bs-btn-bg: var(--bs-info);
+  --bs-btn-border-color: var(--bs-info);
+  --bs-btn-hover-color: #000;
+  --bs-btn-hover-bg: var(--bs-info);
+  --bs-btn-hover-border-color: var(--bs-info);
+  --bs-btn-active-color: #000;
+  --bs-btn-active-bg: var(--bs-info);
+  --bs-btn-active-border-color: var(--bs-info);
+  opacity: 0.9;
+}
+
+[data-bs-theme="dark"] .btn-info:hover {
+  opacity: 1;
+}
+
+/* Outline按钮优化 */
+[data-bs-theme="dark"] .btn-outline-secondary {
+  --bs-btn-color: var(--bs-secondary-color);
+  --bs-btn-border-color: var(--bs-border-color);
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: var(--bs-secondary);
+  --bs-btn-hover-border-color: var(--bs-secondary);
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: var(--bs-secondary);
+  --bs-btn-active-border-color: var(--bs-secondary);
+}
+
+/* 表格文字颜色强化 */
+.table {
+  --bs-table-color: var(--bs-body-color);
+}
+
+[data-bs-theme="dark"] .table {
+  --bs-table-color: var(--bs-body-color);
+  --bs-table-bg: transparent;
+  --bs-table-border-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .table th {
+  color: var(--bs-body-color) !important;
+  border-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .table td {
+  border-color: var(--bs-border-color);
+}
+
+/* 保持状态颜色在深色主题下的一致性 */
+[data-bs-theme="dark"] .text-success {
+  color: var(--bs-success-text-emphasis) !important;
+}
+
+[data-bs-theme="dark"] .text-warning {
+  color: var(--bs-warning-text-emphasis) !important;
+}
+
+[data-bs-theme="dark"] .text-danger {
+  color: var(--bs-danger-text-emphasis) !important;
+}
+
+[data-bs-theme="dark"] .text-info {
+  color: var(--bs-info-text-emphasis) !important;
+}
+
+[data-bs-theme="dark"] .text-primary {
+  color: var(--bs-primary-text-emphasis) !important;
+}
+
+/* 文本颜色强化 */
+[data-bs-theme="dark"] .text-muted {
+  color: var(--bs-secondary-color) !important;
+}
+
+[data-bs-theme="dark"] .card-table th {
+  color: var(--bs-body-color) !important;
+  background-color: var(--bs-secondary-bg);
+}
+
+/* Token卡片深色主题背景 - 圆角优化版本 */
+[data-bs-theme="dark"] .card {
+  background-color: var(--bs-secondary-bg);
+  border-color: var(--bs-border-color);
+  border-radius: 0.75rem; /* 更大的圆角 */
+  overflow: hidden; /* 确保内容不会超出圆角边框 */
+}
+
+[data-bs-theme="dark"] .card-body {
+  background-color: transparent; /* 使用透明背景，继承卡片背景 */
+}
+
+[data-bs-theme="dark"] .card-header {
+  background-color: var(--bs-tertiary-bg);
+  border-color: var(--bs-border-color);
+  color: var(--bs-body-color);
+  border-top-left-radius: 0.75rem;
+  border-top-right-radius: 0.75rem;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+[data-bs-theme="dark"] .card-footer {
+  background-color: var(--bs-tertiary-bg);
+  border-color: var(--bs-border-color);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-left-radius: 0.75rem;
+  border-bottom-right-radius: 0.75rem;
+}
+
+/* Popover消息提示框深色主题优化 */
+[data-bs-theme="dark"] .popover {
+  background-color: var(--bs-secondary-bg);
+  border-color: var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .popover-header {
+  background-color: var(--bs-tertiary-bg);
+  border-color: var(--bs-border-color);
+  color: var(--bs-body-color);
+}
+
+[data-bs-theme="dark"] .popover-body {
+  background-color: var(--bs-secondary-bg);
+  color: var(--bs-body-color) !important;
+}
+
+/* 下拉菜单深色主题优化 */
+[data-bs-theme="dark"] .dropdown-menu {
+  background-color: var(--bs-secondary-bg) !important;
+  border-color: var(--bs-border-color) !important;
+  color: var(--bs-body-color) !important;
+}
+
+[data-bs-theme="dark"] .dropdown-menu.show {
+  background-color: var(--bs-secondary-bg) !important;
+  border-color: var(--bs-border-color) !important;
+}
+
+[data-bs-theme="dark"] .dropdown-item {
+  color: var(--bs-body-color) !important;
+}
+
+[data-bs-theme="dark"] .dropdown-item:hover,
+[data-bs-theme="dark"] .dropdown-item:focus {
+  background-color: var(--bs-tertiary-bg) !important;
+  color: var(--bs-body-color) !important;
 }
