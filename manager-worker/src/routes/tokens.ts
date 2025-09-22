@@ -173,12 +173,7 @@ export async function updateTokenHandler(
     const pathParts = url.pathname.split('/');
     const tokenId = pathParts[pathParts.indexOf('tokens') + 1];
 
-    console.log('Update token request:', {
-      url: url.pathname,
-      pathParts,
-      tokenId,
-      isReactivate: true
-    });
+
 
     if (!tokenId || tokenId === 'tokens') {
       return createErrorResponse('Token ID is required', 400);
@@ -491,5 +486,247 @@ export async function getTokenStatsHandler(
   } catch (error) {
     console.error('Get token stats error:', error);
     return createErrorResponse('Failed to get token statistics', 500);
+  }
+}
+
+/**
+ * Share token to public pool
+ */
+export async function shareTokenHandler(
+  request: AuthenticatedRequest,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
+  try {
+    const user = getCurrentUser(request);
+    if (!user) {
+      return createErrorResponse('Authentication required', 401);
+    }
+
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const tokenId = pathParts[pathParts.length - 2]; // Get token ID from /api/tokens/{id}/share
+
+    if (!tokenId) {
+      return createErrorResponse('Token ID is required', 400);
+    }
+
+    const tokenService = new TokenService(env);
+    const token = await tokenService.getTokenById(tokenId);
+
+    if (!token) {
+      return createNotFoundResponse('Token not found');
+    }
+
+    // Check if user has permission to share this token
+    if (user.role !== 'admin' && token.created_by !== user.id) {
+      return createErrorResponse('Permission denied', 403);
+    }
+
+    // Check if token is already shared
+    const shareInfo = token.share_info ? JSON.parse(token.share_info) : null;
+    if (shareInfo?.recharge_card) {
+      
+      // 如果没有is_shared字段，说明是旧数据，需要更新一下
+      if (token.is_shared === null || token.is_shared === undefined) {
+        await tokenService.updateToken(tokenId, {
+          is_shared: true
+        });
+      }
+      // 需要将shareInfo作为参数返回
+      return createSuccessResponse({
+        message: 'Token already shared',
+        recharge_card: shareInfo.recharge_card,
+        deactivation_code: shareInfo.deactivation_code,
+        share_info: token.share_info,
+        is_shared: true
+      });
+    }
+
+    // Prepare data for sharing API
+    const shareData = [{
+      tenant_url: token.tenant_url,
+      access_token: token.access_token,
+      portal_url: token.portal_url,
+      email_note: token.email_note
+    }];
+
+    // Call public sharing API
+    const shareResponse = await fetch('https://public.ks666.win/api/import', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(shareData)
+    });
+    if (!shareResponse.ok) {
+      return createErrorResponse('Failed to share token to public pool', 500);
+    }
+
+    const shareResult = await shareResponse.json() as any;
+
+    if (!shareResult.success) {
+      return createErrorResponse(shareResult.errors?.join(', ') || 'Failed to share token', 500);
+    }
+
+    // Check if token was skipped (already exists)
+    if (shareResult.skipped > 0) {
+      // Token already exists in public pool, need to search for activation code
+      const searchResponse = await fetch('https://public.ks666.win/api/public/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email_notes: [token.email_note]
+        })
+      });
+
+      if (!searchResponse.ok) {
+        return createErrorResponse('Failed to search existing token in public pool', 500);
+      }
+
+      const searchResult = await searchResponse.json() as any;
+
+      if (!searchResult.success || !searchResult.data || searchResult.data.length === 0) {
+        return createErrorResponse('Token exists in public pool but activation code not found', 500);
+      }
+
+      const existingToken = searchResult.data[0];
+
+      // Update token with existing activation code (no deactivation code for existing tokens)
+      const newShareInfo = {
+        recharge_card: existingToken.activation_code,
+        deactivation_code: null // No deactivation code for existing tokens
+      };
+
+      await tokenService.updateToken(tokenId, {
+        share_info: JSON.stringify(newShareInfo),
+        is_shared: true
+      });
+
+      return createSuccessResponse({
+        message: 'Token was already shared, retrieved existing activation code',
+        recharge_card: existingToken.activation_code,
+        deactivation_code: null,
+        share_info: JSON.stringify(newShareInfo),
+        is_shared: true
+      });
+    }
+
+    // New token shared successfully
+    if (shareResult.errors && shareResult.errors.length > 0) {
+      return createErrorResponse(shareResult.errors.join(', '), 500);
+    }
+
+    const cardPair = shareResult.email_card_pairs[0];
+
+    // Update token with sharing information
+    const newShareInfo = {
+      recharge_card: cardPair.recharge_card,
+      deactivation_code: cardPair.deactivation_code
+    };
+
+    await tokenService.updateToken(tokenId, {
+      share_info: JSON.stringify(newShareInfo),
+      is_shared: true
+    });
+
+    return createSuccessResponse({
+      message: 'Token shared successfully',
+      recharge_card: cardPair.recharge_card,
+      deactivation_code: cardPair.deactivation_code,
+      share_info: JSON.stringify(newShareInfo),
+      is_shared: true
+    });
+
+  } catch (error) {
+    console.error('Share token error:', error);
+    return createErrorResponse('Failed to share token', 500);
+  }
+}
+
+/**
+ * Reset recharge card for shared token
+ */
+export async function resetRechargeCardHandler(
+  request: AuthenticatedRequest,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
+  try {
+    const user = getCurrentUser(request);
+    if (!user) {
+      return createErrorResponse('Authentication required', 401);
+    }
+
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const tokenId = pathParts[3]; // /api/tokens/{id}/reset-card
+
+    if (!tokenId) {
+      return createErrorResponse('Token ID is required', 400);
+    }
+
+    const tokenService = new TokenService(env);
+    const token = await tokenService.getTokenById(tokenId);
+
+    if (!token) {
+      return createNotFoundResponse('Token not found');
+    }
+
+    // Check if user has permission to reset this token
+    if (user.role !== 'admin' && token.created_by !== user.id) {
+      return createErrorResponse('Permission denied', 403);
+    }
+
+    // Check if token is shared
+    const tokenShareInfo = token.share_info ? JSON.parse(token.share_info) : null;
+    if (!tokenShareInfo?.recharge_card || !tokenShareInfo?.deactivation_code) {
+      return createErrorResponse('Token is not shared', 400);
+    }
+
+    // Call reset API
+    const resetResponse = await fetch('https://public.ks666.win/api/public/deactivate-card', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email_note: token.email_note,
+        deactivation_code: tokenShareInfo.deactivation_code
+      })
+    });
+
+    if (!resetResponse.ok) {
+      return createErrorResponse('Failed to reset recharge card', 500);
+    }
+
+    const resetResult = await resetResponse.json() as any;
+
+    if (!resetResult.success) {
+      return createErrorResponse('Failed to reset recharge card', 500);
+    }
+
+    // Update token with new recharge card
+    const updatedShareInfo = {
+      ...tokenShareInfo,
+      recharge_card: resetResult.data.new_recharge_card
+    };
+
+    await tokenService.updateToken(tokenId, {
+      share_info: JSON.stringify(updatedShareInfo)
+    });
+
+    return createSuccessResponse({
+      message: 'Recharge card reset successfully',
+      old_recharge_card: resetResult.data.old_recharge_card,
+      new_recharge_card: resetResult.data.new_recharge_card,
+      share_info: JSON.stringify(updatedShareInfo)
+    });
+
+  } catch (error) {
+    console.error('Reset recharge card error:', error);
+    return createErrorResponse('Failed to reset recharge card', 500);
   }
 }

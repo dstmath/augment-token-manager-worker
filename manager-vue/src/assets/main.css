@@ -1,4 +1,17 @@
 /* Custom styles for Tabler integration */
+
+/* Indigo 颜色类 */
+.bg-indigo {
+  background-color: var(--bs-indigo) !important;
+}
+
+.text-indigo {
+  color: var(--bs-indigo) !important;
+}
+
+.border-indigo {
+  border-color: var(--bs-indigo) !important;
+}
 #app {
   min-height: 100vh;
   display: flex;
@@ -238,6 +251,13 @@
 
 [data-bs-theme="dark"] .table td {
   border-color: var(--bs-border-color);
+}
+
+/* Bootstrap下拉菜单宽度优化 */
+.dropdown-menu {
+  min-width: auto !important;
+  width: max-content !important;
+  white-space: nowrap;
 }
 
 /* 保持状态颜色在深色主题下的一致性 */

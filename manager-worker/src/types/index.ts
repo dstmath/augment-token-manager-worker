@@ -62,6 +62,8 @@ export interface TokenRecord {
   created_at: string;
   updated_at: string;
   created_by: string;
+  share_info?: string; // JSON string containing recharge_card and deactivation_code
+  is_shared?: boolean; // Whether the token is shared to public pool
 }
 
 // UUID management types
@@ -151,6 +153,8 @@ export interface UpdateTokenRequest {
   portal_url?: string;
   email_note?: string;
   ban_status?: string;
+  share_info?: string;
+  is_shared?: boolean;
 }
 
 export interface CreateUuidRequest {

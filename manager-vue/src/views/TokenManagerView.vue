@@ -82,7 +82,7 @@
       <div class="container-xl">
         <!-- 状态统计窗口 -->
         <div class="row mb-4">
-          <div class="col-6 col-lg-3">
+          <div class="col-6 col-xl-2 col-lg-3">
             <div
               class="card card-sm cursor-pointer"
               :class="{ 'border-success': activeFilter === '正常' }"
@@ -107,7 +107,7 @@
               </div>
             </div>
           </div>
-          <div class="col-6 col-lg-3">
+          <div class="col-6 col-xl-2 col-lg-3">
             <div
               class="card card-sm cursor-pointer"
               :class="{ 'border-warning': activeFilter === '失效' }"
@@ -132,7 +132,7 @@
               </div>
             </div>
           </div>
-          <div class="col-6 col-lg-3">
+          <div class="col-6 col-xl-2 col-lg-3">
             <div
               class="card card-sm cursor-pointer"
               :class="{ 'border-danger': activeFilter === '不可用' }"
@@ -157,7 +157,7 @@
               </div>
             </div>
           </div>
-          <div class="col-6 col-lg-3">
+          <div class="col-6 col-xl-2 col-lg-3">
             <div
               class="card card-sm cursor-pointer"
               :class="{ 'border-secondary': activeFilter === '未知' }"
@@ -182,26 +182,62 @@
               </div>
             </div>
           </div>
+          <div class="col-6 col-xl-2 col-lg-3">
+            <div
+              class="card card-sm cursor-pointer"
+              :class="{ 'border-indigo': activeFilter === '已分享' }"
+              @click="toggleFilter('已分享')"
+            >
+              <div class="card-body">
+                <div class="row align-items-center">
+                  <div class="col-auto">
+                    <span class="bg-indigo text-white avatar">
+                      <i class="bi bi-share"></i>
+                    </span>
+                  </div>
+                  <div class="col">
+                    <div class="font-weight-medium">
+                      已分享
+                    </div>
+                  </div>
+                  <div class="col-auto">
+                    <div class="h1 mb-0 text-indigo">{{ sharedTokensCount }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         <!-- 卡片视图 -->
         <div v-if="viewMode === 'card'" class="row row-cards">
           <div v-for="token in tokens" :key="token.id" class="col-sm-6 col-lg-4">
-            <div :class="['card', { 'border-primary': isSelectMode && selectedTokenIds.has(token.id) }]">
+            <div
+              :class="[
+                'card',
+                {
+                  'border-primary': isSelectMode && selectedTokenIds.has(token.id),
+                  'card-selectable': isSelectMode
+                }
+              ]"
+              @click="isSelectMode ? toggleTokenSelection(token.id) : null"
+              :style="isSelectMode ? 'cursor: pointer;' : ''"
+            >
               <div class="card-body">
-                <!-- 选择模式下的复选框 -->
-                <div v-if="isSelectMode" class="position-absolute" style="top: 10px; left: 10px; z-index: 10;">
-                  <input
-                    type="checkbox"
-                    class="form-check-input"
-                    :checked="selectedTokenIds.has(token.id)"
-                    @change="toggleTokenSelection(token.id)"
-                  />
-                </div>
 
                 <!-- 卡片头部 -->
                 <div class="d-flex align-items-center mb-3">
                   <div class="flex-fill">
-                    <div class="font-weight-medium">{{ token.email_note || '未设置备注' }}</div>
+                    <div class="font-weight-medium">
+                      {{ token.email_note || '未设置备注' }}
+                      <span
+                        v-if="isTokenShared(token)"
+                        class="badge bg-indigo text-white ms-2 cursor-pointer"
+                        @click="showShareInfoModal(token)"
+                        title="点击查看分享信息"
+                      >
+                        已分享
+                      </span>
+                    </div>
                     <div class="text-muted small">过期时间: {{ getExpiryDate(token) }}</div>
                   </div>
                   <div class="ms-auto">
@@ -210,7 +246,7 @@
                         isValidating && validatingToken?.id === token.id ? 'bg-warning text-white' :
                         getTokenStatusClass(token)]"
                       @click="handleStatusClick(token)"
-                      :title="getTokenStatus(token) === '失效' ? '点击选择操作（验证或重新激活）' : '点击验证Token状态'"
+                      :title="isTokenShared(token) ? '点击查看分享信息和激活码' : (getTokenStatus(token) === '失效' ? '点击选择操作（验证或重新激活）' : '点击验证Token状态')"
                     >
                       <span v-if="isValidating && validatingToken?.id === token.id" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
                       {{ isValidating && validatingToken?.id === token.id ? '验证中' : getTokenStatus(token) }}
@@ -317,7 +353,17 @@
                       @change="toggleTokenSelection(token.id)"
                     />
                   </td>
-                  <td class="text-muted">{{ token.email_note || '未设置备注' }}</td>
+                  <td class="text-muted">
+                    {{ token.email_note || '未设置备注' }}
+                    <span
+                      v-if="isTokenShared(token)"
+                      class="badge bg-indigo text-white ms-2 cursor-pointer"
+                      @click="showShareInfoModal(token)"
+                      title="点击查看分享信息"
+                    >
+                      已分享
+                    </span>
+                  </td>
                   <td :class="['text-center', getDaysColorClass(token)]">
                     {{ getExpiryDate(token) }}
                   </td>
@@ -333,7 +379,7 @@
                         isValidating && validatingToken?.id === token.id ? 'bg-warning text-white' :
                         getTokenStatusClass(token)]"
                       @click="handleStatusClick(token)"
-                      :title="getTokenStatus(token) === '失效' ? '点击选择操作（验证或重新激活）' : '点击验证Token状态'"
+                      :title="isTokenShared(token) ? '点击查看分享信息和激活码' : (getTokenStatus(token) === '失效' ? '点击选择操作（验证或重新激活）' : '点击验证Token状态')"
                     >
                       <span v-if="isValidating && validatingToken?.id === token.id" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
                       {{ isValidating && validatingToken?.id === token.id ? '验证中' : getTokenStatus(token) }}
@@ -939,9 +985,113 @@
               <i class="bi bi-x-lg me-1"></i>
               取消
             </button>
+            <button
+              v-if="!isTokenShared(editingToken)"
+              type="button"
+              class="btn btn-indigo me-2"
+              @click="shareToken(editingToken)"
+            >
+              <i class="bi bi-share me-1"></i>
+              分享
+            </button>
+
             <button type="button" class="btn btn-primary" @click="updateToken">
               <i class="bi bi-check-lg me-1"></i>
               保存
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 分享信息查看模态框 -->
+    <div v-if="showShareInfoModalFlag" class="modal modal-blur fade show" style="display: block;">
+      <div class="modal-dialog modal-dialog-centered" role="document" @click.stop>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">分享信息</h5>
+            <button type="button" class="btn-close" @click="closeShareInfoModal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-info" role="alert">
+              <div class="d-flex">
+                <div>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="icon alert-icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                    <circle cx="12" cy="12" r="9"/>
+                    <path d="M12 8h.01"/>
+                    <path d="M11 12h1v4h1"/>
+                  </svg>
+                </div>
+                <div>
+                  <h4>Token已分享到公共池</h4>
+                  <div class="text-muted">此Token已成功分享，用户可以使用激活码进行激活。</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">激活码</label>
+              <div class="input-group">
+                <input
+                  type="text"
+                  class="form-control"
+                  :value="getShareInfo(shareInfoToken)?.recharge_card || ''"
+                  readonly
+                >
+                <button
+                  class="btn btn-outline-secondary"
+                  type="button"
+                  @click="copyToClipboard(getShareInfo(shareInfoToken)?.recharge_card || '', '激活码')"
+                >
+                  <i class="bi bi-clipboard"></i>
+                </button>
+              </div>
+            </div>
+
+            <div v-if="getShareInfo(shareInfoToken)?.deactivation_code" class="mb-3">
+              <label class="form-label">反激活码</label>
+              <div class="input-group">
+                <input
+                  type="text"
+                  class="form-control"
+                  :value="getShareInfo(shareInfoToken)?.deactivation_code || ''"
+                  readonly
+                >
+                <button
+                  class="btn btn-outline-secondary"
+                  type="button"
+                  @click="copyToClipboard(getShareInfo(shareInfoToken)?.deactivation_code || '', '反激活码')"
+                >
+                  <i class="bi bi-clipboard"></i>
+                </button>
+              </div>
+              <div class="form-text text-danger">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                反激活码请勿公开，仅用于重置激活码
+              </div>
+            </div>
+
+            <div v-else class="mb-3">
+              <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                此Token已存在于公共池中，无反激活码。如需重置激活码，请联系管理员。
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn me-auto" @click="closeShareInfoModal">
+              <i class="bi bi-x-lg me-1"></i>
+              关闭
+            </button>
+            <button
+              v-if="getShareInfo(shareInfoToken)?.deactivation_code"
+              type="button"
+              class="btn btn-warning"
+              @click="resetRechargeCard(shareInfoToken)"
+            >
+              <i class="bi bi-arrow-clockwise me-1"></i>
+              重置激活码
             </button>
           </div>
         </div>
@@ -1161,7 +1311,7 @@
                 <span class="badge text-bg-primary ms-2">{{ activeFilter }}</span>
               </template>
               <template v-else>
-                <span class="badge text-bg-light ms-2">仅正常、未知和失效状态</span>
+                <span class="badge text-bg-light ms-2">所有Token</span>
               </template><br>
               <strong>验证方式：</strong>逐个验证，避免服务器压力
             </div>
@@ -1468,7 +1618,6 @@
         </div>
       </div>
     </div>
-  </div>
 
   <!-- 执行Token模态框 -->
   <div v-if="showExecuteModal" class="modal modal-blur fade show" style="display: block;" tabindex="-1">
@@ -1526,6 +1675,7 @@
       </div>
     </div>
   </div>
+</div>
 </template>
 
 <script setup lang="ts">
@@ -1545,6 +1695,8 @@ interface Token {
   portal_info: string
   created_at: string
   updated_at: string
+  share_info?: string
+  is_shared?: boolean
 }
 
 interface PortalInfo {
@@ -1603,6 +1755,8 @@ const showGetModal = ref(false)
 const showAddModal = ref(false)
 const showEditModal = ref(false)
 const showDeleteModal = ref(false)
+const showShareInfoModalFlag = ref(false)
+const shareInfoToken = ref<Token | null>(null)
 const showValidateConfirmModal = ref(false)
 const validatingToken = ref<Token | null>(null)
 const isValidating = ref(false)
@@ -1698,7 +1852,6 @@ const isValidatingResponse = ref(false)
 const tokenData = ref({
   tenant_url: '',
   access_token: '',
-  email: '',
   portal_url: ''
 })
 const emailNote = ref('')
@@ -1787,6 +1940,11 @@ const statusStats = computed(() => {
   })
 
   return stats
+})
+
+// 已分享Token计数
+const sharedTokensCount = computed(() => {
+  return allTokens.value.filter(token => isTokenShared(token)).length
 })
 
 // 获取Token流程相关数据
@@ -1889,6 +2047,10 @@ const getFilteredTokens = () => {
   // 应用筛选
   if (activeFilter.value) {
     filteredTokens = filteredTokens.filter(token => {
+      if (activeFilter.value === '已分享') {
+        return isTokenShared(token)
+      }
+
       const status = getTokenStatus(token)
       if (activeFilter.value === '不可用') {
         return status === '封禁' || status === '燃尽' || status === '过期'
@@ -2125,6 +2287,7 @@ const getRemainingCredits = (token: Token): string => {
 }
 
 const getTokenStatus = (token: Token): '正常' | '失效' | '封禁' | '过期' | '燃尽' | '未知' => {
+
   // 解析portal_info获取余额和过期时间
   const portalInfo = parsePortalInfo(token.portal_info)
 
@@ -2288,14 +2451,15 @@ const validateAndNextStep = async () => {
       tokenData.value = {
         tenant_url: data.data.tenant_url || '',
         access_token: data.data.access_token || '',
-        email: data.data.email || generatedEmail.value || '',
         portal_url: isReactivateMode.value && reactivatingToken.value
           ? reactivatingToken.value.portal_url
           : (portalUrl.value || data.data.portal_url || '')
       }
 
-      // 如果有生成的邮箱，自动填入邮箱备注
-      if (generatedEmail.value) {
+      // 如果有生成的邮箱或OAuth返回的邮箱，自动填入邮箱备注
+      if (data.data.email) {
+        emailNote.value = data.data.email
+      } else if (generatedEmail.value) {
         emailNote.value = generatedEmail.value
       }
 
@@ -2326,7 +2490,6 @@ const saveToken = async () => {
     const payload: any = {
       tenant_url: tokenData.value.tenant_url,
       access_token: tokenData.value.access_token,
-      email: tokenData.value.email,
       portal_url: isReactivateMode.value && reactivatingToken.value
         ? reactivatingToken.value.portal_url
         : tokenData.value.portal_url,
@@ -2453,17 +2616,11 @@ const validateSelectedTokens = () => {
     return
   }
 
-  // 获取选中的token
+  // 获取选中的token（所有选中的都可以验证）
   const selectedTokens = tokens.value.filter(token => selectedTokenIds.value.has(token.id))
 
-  // 筛选出可以验证的Token（正常、未知和失效状态）
-  const validatableTokens = selectedTokens.filter(token => {
-    const status = getTokenStatus(token)
-    return status === '正常' || status === '未知' || status === '失效'
-  })
-
-  if (validatableTokens.length === 0) {
-    toast.info('选中的Token中没有可验证的（只有正常、未知和失效状态的Token可以验证）')
+  if (selectedTokens.length === 0) {
+    toast.error('请先选择要验证的Token')
     return
   }
 
@@ -2472,7 +2629,7 @@ const validateSelectedTokens = () => {
     valid: 0,
     invalid: 0,
     failed: 0,
-    total: validatableTokens.length
+    total: selectedTokens.length
   }
 
   showBatchValidateModal.value = true
@@ -2504,14 +2661,8 @@ const validateAllTokens = () => {
     return
   }
 
-  // 筛选出可以验证的Token（正常、未知和失效状态）
-  const validatableTokens = tokens.value.filter(token => {
-    const status = getTokenStatus(token)
-    return status === '正常' || status === '未知' || status === '失效'
-  })
-
-  if (validatableTokens.length === 0) {
-    toast.info('没有可验证的Token（只有正常、未知和失效状态的Token可以验证）')
+  if (tokens.value.length === 0) {
+    toast.error('没有Token需要验证')
     return
   }
 
@@ -2520,7 +2671,7 @@ const validateAllTokens = () => {
     valid: 0,
     invalid: 0,
     failed: 0,
-    total: validatableTokens.length
+    total: tokens.value.length
   }
 
   showBatchValidateModal.value = true
@@ -2893,7 +3044,7 @@ const importBatchTokens = async () => {
         // 重新加载Token列表
         await refreshTokens()
       } else {
-        toast.error(data.message || '批量导入失败')
+        toast.error(data.error || data.message || '批量导入失败')
       }
     } catch (error) {
       if (error instanceof SyntaxError) {
@@ -3006,8 +3157,6 @@ const executeApplication = async (app: any) => {
     }
 
     const executeUrl = `${app.protocol}://augment.vscode-augment/autoAuth?token=${encodeURIComponent(accessToken)}&url=${encodeURIComponent(tenantUrl)}&portal=${encodeURIComponent(portalUrl)}`
-
-    console.log('生成的执行URL:', executeUrl)
 
     window.open(executeUrl, '_blank')
     toast.success(`正在启动 ${app.name}...`)
@@ -3284,23 +3433,17 @@ const confirmBatchValidate = async () => {
     ? tokens.value.filter(token => selectedTokenIds.value.has(token.id))
     : tokens.value
 
-  // 筛选出可以验证的Token（正常、未知和失效状态）
-  const validatableTokens = tokensToValidate.filter(token => {
-    const status = getTokenStatus(token)
-    return status === '正常' || status === '未知' || status === '失效'
-  })
-
   // 重置结果
   batchValidateResults.value = {
     valid: 0,
     invalid: 0,
     failed: 0,
-    total: validatableTokens.length
+    total: tokensToValidate.length
   }
 
   try {
     // 使用新的批量验证API
-    const tokenIds = validatableTokens.map(token => token.id)
+    const tokenIds = tokensToValidate.map(token => token.id)
     const response = await apiPost('/api/tokens/batch-validate', { tokenIds })
 
     const data = await response.json()
@@ -3340,12 +3483,12 @@ const confirmBatchValidate = async () => {
     } else {
       // API调用失败，回退到逐个验证
       console.warn('批量验证API失败，回退到逐个验证')
-      await fallbackIndividualValidation(validatableTokens)
+      await fallbackIndividualValidation(tokensToValidate)
     }
   } catch (error) {
     console.error('批量验证失败，回退到逐个验证:', error)
     // 回退到逐个验证
-    await fallbackIndividualValidation(validatableTokens)
+    await fallbackIndividualValidation(tokensToValidate)
   }
 
   // 验证完成
@@ -3362,18 +3505,18 @@ const confirmBatchValidate = async () => {
 }
 
 // 回退到逐个验证的方法
-const fallbackIndividualValidation = async (validatableTokens) => {
+const fallbackIndividualValidation = async (tokensToValidate) => {
   // 重置结果
   batchValidateResults.value = {
     valid: 0,
     invalid: 0,
     failed: 0,
-    total: validatableTokens.length
+    total: tokensToValidate.length
   }
 
   // 逐个验证Token，添加延迟
-  for (let i = 0; i < validatableTokens.length; i++) {
-    const token = validatableTokens[i]
+  for (let i = 0; i < tokensToValidate.length; i++) {
+    const token = tokensToValidate[i]
 
     try {
       const response = await apiPost(`/api/tokens/${token.id}/validate`, {})
@@ -3407,7 +3550,7 @@ const fallbackIndividualValidation = async (validatableTokens) => {
     }
 
     // 添加延迟，避免服务器压力（每个请求间隔500ms）
-    if (i < validatableTokens.length - 1) {
+    if (i < tokensToValidate.length - 1) {
       await new Promise(resolve => setTimeout(resolve, 500))
     }
   }
@@ -3588,7 +3731,6 @@ const getVerificationCode = async (isAutoRefresh = false) => {
 
       // 检查是否与上次获取的验证码相同
       if (isAutoRefresh && newCode === lastVerificationCode.value && newCode !== '') {
-        console.log('验证码未变化，不计入有效获取')
         return false
       }
 
@@ -3662,11 +3804,6 @@ const startVerificationRefresh = () => {
     const result = await getVerificationCode(true)
 
     // 简化逻辑：固定10秒间隔，只判断是否相同，相同时不弹窗提示
-    if (result === false) {
-      console.log('验证码未更新或获取失败，10秒后重试')
-    } else {
-      console.log('验证码获取成功')
-    }
 
     // 重新设置定时器，固定10秒间隔
     if (autoRefreshVerificationCode.value) {
@@ -3694,6 +3831,13 @@ const formatTimestamp = (timestamp: string) => {
 // 处理状态点击事件
 const handleStatusClick = (token: Token) => {
   const status = getTokenStatus(token)
+
+  // 如果Token已分享，显示分享信息
+  if (isTokenShared(token)) {
+    showShareInfoModal(token)
+    return
+  }
+
   if (status === '失效') {
     // 失效状态：显示选择菜单（验证或重新激活）
     showInvalidTokenActionModal.value = true
@@ -3777,6 +3921,134 @@ onMounted(() => {
 onUnmounted(() => {
   stopVerificationRefresh()
 })
+
+// 更新Token数组的辅助函数
+const updateTokenInArrays = (updatedToken: Token) => {
+  // 更新全部Token数据缓存
+  const allIndex = allTokens.value.findIndex(t => t.id === updatedToken.id)
+  if (allIndex > -1) {
+    allTokens.value[allIndex] = updatedToken
+  }
+
+  // 更新当前页显示的Token数据
+  const index = tokens.value.findIndex(t => t.id === updatedToken.id)
+  if (index > -1) {
+    tokens.value[index] = updatedToken
+  }
+}
+
+// 分享相关方法
+const shareToken = async (token: Token) => {
+  try {
+    const response = await apiPost(`/api/tokens/${token.id}/share`, {})
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      toast.error(errorData.error || errorData.message || 'Token分享失败')
+      return
+    }
+
+    const data = await response.json()
+
+    if (data.success) {
+      toast.success(data.message || 'Token分享成功！')
+
+      // 局部更新Token数据，只更新分享相关字段
+      const updatedFields = {
+        share_info: data.data.share_info,
+        is_shared: data.data.is_shared,
+        updated_at: new Date().toISOString()
+      }
+
+      // 更新全部Token数据缓存
+      const allIndex = allTokens.value.findIndex(t => t.id === token.id)
+      if (allIndex > -1) {
+        allTokens.value[allIndex] = { ...allTokens.value[allIndex], ...updatedFields }
+      }
+
+      // 更新当前页显示的Token数据
+      const index = tokens.value.findIndex(t => t.id === token.id)
+      if (index > -1) {
+        tokens.value[index] = { ...tokens.value[index], ...updatedFields }
+      }
+
+      // 关闭编辑模态框
+      closeEditModal()
+
+      // 显示分享信息
+      const updatedToken = { ...token, ...updatedFields }
+      showShareInfoModal(updatedToken)
+    } else {
+      toast.error(data.error || data.message || 'Token分享失败')
+    }
+  } catch (error) {
+    console.error('Share token error:', error)
+    toast.error('Token分享失败，请重试')
+  }
+}
+
+const showShareInfoModal = (token: Token) => {
+  shareInfoToken.value = token
+  showShareInfoModalFlag.value = true
+}
+
+const closeShareInfoModal = () => {
+  showShareInfoModalFlag.value = false
+  shareInfoToken.value = null
+}
+
+const resetRechargeCard = async (token: Token | null) => {
+  if (!token) return
+
+  try {
+    const response = await apiPost(`/api/tokens/${token.id}/reset-card`, {})
+    const data = await response.json()
+
+
+
+    if (data.success) {
+      toast.success(data.message || '激活码重置成功！')
+
+      // 局部更新Token数据
+      const updatedToken = {
+        ...token,
+        share_info: data.data.share_info,
+        updated_at: new Date().toISOString()
+      }
+      updateTokenInArrays(updatedToken)
+      shareInfoToken.value = updatedToken
+    } else {
+      toast.error(data.error || data.message || '激活码重置失败')
+    }
+  } catch (error) {
+    console.error('Reset recharge card error:', error)
+    toast.error('激活码重置失败，请重试')
+  }
+}
+
+const copyToClipboard = async (text: string, label: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.success(`${label}已复制到剪贴板`)
+  } catch (error) {
+    console.error('Copy to clipboard error:', error)
+    toast.error('复制失败，请手动复制')
+  }
+}
+
+// 辅助函数
+const isTokenShared = (token: Token): boolean => {
+  return token.is_shared === true
+}
+
+const getShareInfo = (token: Token | null): { recharge_card: string; deactivation_code: string | null } | null => {
+  if (!token?.share_info) return null
+  try {
+    return JSON.parse(token.share_info)
+  } catch (e) {
+    return null
+  }
+}
 </script>
 
 <style scoped>
@@ -4062,5 +4334,20 @@ i.refresh-spin {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   transition: all 0.2s ease;
+}
+
+/* 卡片选择模式样式 */
+.card-selectable {
+  transition: all 0.2s ease;
+}
+
+.card-selectable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.card-selectable.border-primary {
+  border-width: 2px !important;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
 }
 </style>

@@ -22,7 +22,9 @@ import {
   validateTokenStatusHandler,
   batchValidateTokensHandler,
   refreshTokenHandler as refreshTokenInfoHandler,
-  getTokenStatsHandler
+  getTokenStatsHandler,
+  shareTokenHandler,
+  resetRechargeCardHandler
 } from './routes/tokens.js';
 import {
   getEmailDomainsHandler,
@@ -58,6 +60,8 @@ const routes: Route[] = [
   { method: 'POST', path: '/api/tokens/:id/validate', handler: validateTokenStatusHandler, requiresAuth: true },
   { method: 'POST', path: '/api/tokens/batch-validate', handler: batchValidateTokensHandler, requiresAuth: true },
   { method: 'POST', path: '/api/tokens/:id/refresh', handler: refreshTokenInfoHandler, requiresAuth: true },
+  { method: 'POST', path: '/api/tokens/:id/share', handler: shareTokenHandler, requiresAuth: true },
+  { method: 'POST', path: '/api/tokens/:id/reset-card', handler: resetRechargeCardHandler, requiresAuth: true },
 
   // Email service routes (integration points for email worker)
   { method: 'GET', path: '/api/email/health', handler: emailHealthHandler, requiresAuth: true },
