@@ -6,6 +6,7 @@ import {
   createUnauthorizedResponse
 } from '../utils/response.js';
 import { getCurrentUser, getCurrentSession } from '../middleware/auth.js';
+import { parseUserCredentials } from '../utils/auth.js';
 import { OAuthHandlers } from '../oauth/handlers.js';
 
 // Legacy OAuth functions removed - now using oauth module
@@ -69,15 +70,7 @@ export async function loginHandler(
     }
 
     // 验证用户凭据
-    const credentials = new Map<string, string>();
-
-    env.USER_CREDENTIALS.split(',').forEach(pair => {
-      const [username, password] = pair.trim().split(':');
-      if (username && password) {
-        credentials.set(username.trim(), password.trim());
-      }
-    });
-
+    const credentials = parseUserCredentials(env.USER_CREDENTIALS);
     const storedPassword = credentials.get(body.username);
     if (!storedPassword || storedPassword !== body.password) {
       return new Response(JSON.stringify({

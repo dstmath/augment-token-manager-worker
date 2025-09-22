@@ -12,8 +12,10 @@ directory = "./dist"
 binding = "ASSETS"
 
 [vars]
-# 用户凭据，格式: 用户名:密码 (User credentials, format: username:password)
-USER_CREDENTIALS = "admin:your-password"
+# 用户凭据，支持数组格式 (User credentials, supports array format)
+# 推荐使用数组格式，避免密码中包含逗号的问题
+USER_CREDENTIALS = ["admin:your-password", "user:user-password"]
+# 也支持旧的字符串格式（兼容性）: "admin:your-password"
 
 # CloudMail邮箱服务配置 (CloudMail email service configuration) - 可选
 # 可用的邮箱域名列表 (Available email domains)

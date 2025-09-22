@@ -56,23 +56,41 @@ export function extractSessionToken(request: Request): string | null {
 
 /**
  * Parse user credentials from environment variable
- * Format: "user1:pass1,user2:pass2,admin:adminpass"
+ * Supports both formats:
+ * - Array format: ["admin:password123", "user:userpass"]
+ * - String format: "user1:pass1,user2:pass2,admin:adminpass" (legacy)
  */
-export function parseUserCredentials(credentialsString: string): Map<string, string> {
+export function parseUserCredentials(credentialsInput: string | string[]): Map<string, string> {
   const credentials = new Map<string, string>();
-  
-  if (!credentialsString) {
+
+  if (!credentialsInput) {
     return credentials;
   }
-  
-  const pairs = credentialsString.split(',');
-  for (const pair of pairs) {
-    const [username, password] = pair.trim().split(':');
-    if (username && password) {
-      credentials.set(username.trim(), password.trim());
+
+  let credentialsList: string[];
+
+  // Handle array format (preferred)
+  if (Array.isArray(credentialsInput)) {
+    credentialsList = credentialsInput;
+  } else {
+    // Handle string format (legacy support)
+    credentialsList = credentialsInput.split(',');
+  }
+
+  for (const credential of credentialsList) {
+    const trimmed = credential.trim();
+    const colonIndex = trimmed.indexOf(':');
+
+    if (colonIndex > 0 && colonIndex < trimmed.length - 1) {
+      const username = trimmed.substring(0, colonIndex).trim();
+      const password = trimmed.substring(colonIndex + 1).trim();
+
+      if (username && password) {
+        credentials.set(username, password);
+      }
     }
   }
-  
+
   return credentials;
 }
 

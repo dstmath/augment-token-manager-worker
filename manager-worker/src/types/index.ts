@@ -10,8 +10,8 @@ export interface Env {
   // D1 Database (optional)
   DB?: D1Database;
 
-  // Secrets
-  USER_CREDENTIALS: string;
+  // Secrets - supports both string and array formats
+  USER_CREDENTIALS: string | string[];
 
   // Email service configuration (CloudMail integration) - optional
   EMAIL_DOMAINS?: string[] | string;

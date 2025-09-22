@@ -31,7 +31,7 @@ npm run kv:create:prod
 #### 必需配置
 
 - **KV命名空间ID**: 将占位符ID替换为步骤2中生成的实际KV命名空间ID
-- **USER_CREDENTIALS**: 设置管理员用户名和密码（格式：`admin:password`）
+- **USER_CREDENTIALS**: 设置用户凭据，支持数组格式（推荐）或字符串格式（兼容性）
 - **EMAIL_API_BASE_URL**: 您的CloudMail部署的基础URL（API路径已硬编码）
 - **EMAIL_API_TOKEN**: CloudMail服务的管理员认证令牌
 
@@ -67,7 +67,13 @@ npm run kv:create:prod
 
 ```toml
 # 开发环境示例
-USER_CREDENTIALS = "admin:dev-password-123"
+
+# 推荐的数组格式（避免密码中包含逗号的问题）
+USER_CREDENTIALS = ["admin:dev-password-123", "user:user-pass", "manager:manager-pass"]
+
+# 兼容的字符串格式
+# USER_CREDENTIALS = "admin:dev-password-123,user:user-pass"
+
 EMAIL_DOMAINS = ["mail.example.com","temp.example.com"]
 EMAIL_API_BASE_URL = "https://your-cloudmail-domain.com"
 EMAIL_API_TOKEN = "your-cloudmail-admin-token"

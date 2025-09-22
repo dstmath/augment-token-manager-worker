@@ -61,7 +61,7 @@ npm run deploy
 
 ### 必需配置
 - **KV命名空间**: TOKENS_KV + SESSIONS_KV
-- **USER_CREDENTIALS**: 用户凭据（格式：admin:password）
+- **USER_CREDENTIALS**: 用户凭据（支持数组格式或字符串格式）
 
 ### 可选配置
 - **EMAIL_DOMAINS**: 邮箱域名列表
