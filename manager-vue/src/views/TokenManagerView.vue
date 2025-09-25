@@ -1000,7 +1000,7 @@
               v-if="!isTokenShared(editingToken)"
               type="button"
               class="btn btn-indigo me-2"
-              @click="shareToken(editingToken)"
+              @click="confirmShareToken(editingToken)"
             >
               <i class="bi bi-share me-1"></i>
               分享
@@ -1199,8 +1199,8 @@
                 <div>
                   <svg xmlns="http://www.w3.org/2000/svg" class="icon alert-icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
                     <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-                    <path d="M12 8v4l3 3"/>
-                    <path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"/>
+                    <path d="M12 8v2m0 4v.01"/>
+                    <path d="M5 19h14a2 2 0 0 0 1.84 -2.75l-7.1 -12.25a2 2 0 0 0 -3.5 0l-7.1 12.25a2 2 0 0 0 1.75 2.75"/>
                   </svg>
                 </div>
                 <div>
@@ -1354,6 +1354,77 @@
             >
               <i class="bi bi-check-circle me-1"></i>
               确认验证
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 批量分享模态框状态 -->
+    <div v-if="showBatchShareModal" class="modal modal-blur fade show" style="display: block;">
+      <div class="modal-dialog modal-sm modal-dialog-centered" role="document" @click.stop>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">确认批量分享</h5>
+            <button type="button" class="btn-close" @click="closeBatchShareModal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-info" role="alert">
+              <div class="d-flex">
+                <div>
+                  <i class="bi bi-info-circle alert-icon" style="font-size: 24px;"></i>
+                </div>
+                <div>
+                  <h4 class="alert-title">即将分享账户到公共池！</h4>
+                  <div class="text-muted">此操作将分享所有选中的Token</div>
+                </div>
+              </div>
+            </div>
+            <div class="text-muted small">
+              <strong>将要分享：</strong>{{ isSelectMode ? selectedTokenIds.size : batchShareResults.total }} 个Token
+              <template v-if="isSelectMode">
+                <span class="badge text-bg-primary ms-2">选中的Token</span>
+              </template>
+              <template v-else-if="activeFilter">
+                <span class="badge text-bg-primary ms-2">{{ activeFilter }}</span>
+              </template>
+              <template v-else>
+                <span class="badge text-bg-light ms-2">全部状态</span>
+              </template><br>
+              <strong>分享方式：</strong>批量分享，分享所有Token
+            </div>
+
+            <!-- 分享进度 -->
+            <div v-if="isBatchSharing" class="mt-3">
+              <div class="progress">
+                <div
+                  class="progress-bar progress-bar-striped progress-bar-animated"
+                  role="progressbar"
+                  :style="{ width: ((batchShareResults.success + batchShareResults.failed) / batchShareResults.total * 100) + '%' }"
+                >
+                  {{ batchShareResults.success + batchShareResults.failed }} / {{ batchShareResults.total }}
+                </div>
+              </div>
+              <div class="text-center mt-2 small">
+                成功: {{ batchShareResults.success }} | 失败: {{ batchShareResults.failed }}
+              </div>
+            </div>
+
+
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn me-auto" @click="closeBatchShareModal" :disabled="isBatchSharing">
+              <i class="bi bi-x-lg me-1"></i>
+              {{ isBatchSharing ? '分享中...' : '取消' }}
+            </button>
+            <button
+              type="button"
+              class="btn btn-indigo"
+              @click="confirmBatchShare"
+              :disabled="isBatchSharing"
+            >
+              <i class="bi bi-share me-1"></i>
+              确认分享
             </button>
           </div>
         </div>
@@ -1801,6 +1872,15 @@ const isBatchValidating = ref(false)
 const batchValidateResults = ref({
   valid: 0,
   invalid: 0,
+  failed: 0,
+  total: 0
+})
+
+// 批量分享模态框状态
+const showBatchShareModal = ref(false)
+const isBatchSharing = ref(false)
+const batchShareResults = ref({
+  successful: 0,
   failed: 0,
   total: 0
 })
@@ -2279,7 +2359,7 @@ const calculateDaysUntilExpiry = (expiryDate: string): number => {
 
   const now = new Date()
   const diffTime = expiry.getTime() - now.getTime()
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
   return Math.max(0, diffDays)
 }
 
@@ -2502,8 +2582,7 @@ const saveToken = async () => {
       access_token: tokenData.value.access_token,
       portal_url: isReactivateMode.value && reactivatingToken.value
         ? reactivatingToken.value.portal_url
-        : tokenData.value.portal_url,
-      email_note: emailNote.value
+        : (portalUrl.value || tokenData.value.portal_url || '')
     }
 
     // 重新激活时设置状态为正常
@@ -2666,72 +2745,20 @@ const refreshSelectedTokens = () => {
 }
 
 // 批量分享选中的Token
-const shareSelectedTokens = async () => {
+const shareSelectedTokens = () => {
   if (!isSelectMode.value || selectedTokenIds.value.size === 0) {
     toast.error('请先选择要分享的Token')
     return
   }
 
-  const tokenIds = Array.from(selectedTokenIds.value)
-
-  try {
-    const response = await apiPost('/api/tokens/batch-share', { tokenIds })
-
-    if (!response.ok) {
-      const errorData = await response.json()
-      toast.error(errorData.error || errorData.message || '批量分享失败')
-      return
-    }
-
-    const data = await response.json()
-
-    if (data.success) {
-      const { successful, failed, total } = data.data
-      toast.success(`批量分享完成！成功: ${successful}, 失败: ${failed}, 总计: ${total}`)
-
-      // 更新Token数据
-      for (const result of data.data.results) {
-        if (result.success) {
-          // 更新全部Token数据缓存
-          const allIndex = allTokens.value.findIndex(t => t.id === result.id)
-          if (allIndex > -1) {
-            allTokens.value[allIndex] = {
-              ...allTokens.value[allIndex],
-              is_shared: true,
-              share_info: JSON.stringify({
-                recharge_card: result.recharge_card,
-                deactivation_code: result.deactivation_code
-              }),
-              updated_at: new Date().toISOString()
-            }
-          }
-
-          // 更新当前页显示的Token数据
-          const index = tokens.value.findIndex(t => t.id === result.id)
-          if (index > -1) {
-            tokens.value[index] = {
-              ...tokens.value[index],
-              is_shared: true,
-              share_info: JSON.stringify({
-                recharge_card: result.recharge_card,
-                deactivation_code: result.deactivation_code
-              }),
-              updated_at: new Date().toISOString()
-            }
-          }
-        }
-      }
-
-      // 清除选择
-      selectedTokenIds.value.clear()
-
-    } else {
-      toast.error(data.error || data.message || '批量分享失败')
-    }
-  } catch (error) {
-    console.error('Batch share error:', error)
-    toast.error('批量分享失败，请重试')
+  // 重置分享结果
+  batchShareResults.value = {
+    successful: 0,
+    failed: 0,
+    total: selectedTokenIds.value.size
   }
+
+  showBatchShareModal.value = true
 }
 
 const validateAllTokens = () => {
@@ -2781,7 +2808,29 @@ const showBatchRefreshConfirm = () => {
   showBatchRefreshModal.value = true
 }
 
+const showBatchShareConfirm = () => {
+  if (tokens.value.length === 0) {
+    toast.error('没有Token需要分享')
+    return
+  }
 
+  // 筛选出有portal_url的Token（只有这些Token可以刷新）
+  const shareableTokens = tokens.value.filter(token => token.portal_url && token.portal_url.trim() !== '')
+
+  if (shareableTokens.length === 0) {
+    toast.info('没有可分享的Token（需要有portal_url）')
+    return
+  }
+
+  // 重置刷新结果
+  batchShareResults.value = {
+    successful: 0,
+    failed: 0,
+    total: shareableTokens.length
+  }
+
+  showBatchShareModal.value = true
+}
 
 const showGetTokenModal = (isReactivate = false) => {
   // 强制清空所有可能残留的重激活状态
@@ -2917,8 +2966,6 @@ const prevStep = () => {
     getTokenStep.value--
   }
 }
-
-
 
 const copyToken = async () => {
   try {
@@ -3617,13 +3664,13 @@ const fallbackIndividualValidation = async (tokensToValidate: Token[]) => {
       if (data.success) {
         // 更新全部Token数据缓存
         const allIndex = allTokens.value.findIndex(t => t.id === token.id)
-        if (allIndex > -1) {
+        if (allIndex > -1 && data.data) {
           allTokens.value[allIndex] = data.data
         }
 
         // 更新当前页显示的Token数据
         const index = tokens.value.findIndex(t => t.id === token.id)
-        if (index > -1) {
+        if (index > -1 && data.data) {
           tokens.value[index] = data.data
         }
 
@@ -3650,6 +3697,118 @@ const fallbackIndividualValidation = async (tokensToValidate: Token[]) => {
   // 显示结果
   const { valid, invalid, failed, total } = batchValidateResults.value
   toast.success(`批量验证完成！有效: ${valid}, 失效: ${invalid}, 错误: ${failed}, 总计: ${total}`)
+}
+
+// 批量分享相关方法
+const closeBatchShareModal = () => {
+  if (!isBatchSharing.value) {
+    showBatchShareModal.value = false
+    batchShareResults.value = {
+      successful: 0,
+      failed: 0,
+      total: 0
+    }
+  }
+}
+
+const confirmBatchShare = async () => {
+  isBatchSharing.value = true
+
+  // 获取要分享的token（如果是选择模式，则只分享选中的token）
+  const tokensToShare = isSelectMode.value
+    ? tokens.value.filter(token => selectedTokenIds.value.has(token.id))
+    : tokens.value
+
+  // 重置结果
+  batchShareResults.value = {
+    successful: 0,
+    failed: 0,
+    total: tokensToShare.length
+  }
+
+  // 逐个分享Token，添加延迟
+  for (let i = 0; i < tokensToShare.length; i++) {
+    const token = tokensToShare[i]
+
+    try {
+      const response = await apiPost('/api/tokens/batch-share', { tokenIds: [token.id] })
+
+      if (!response.ok) {
+        batchShareResults.value.failed++
+        const errorData = await response.json()
+        console.error(`Token ${token.id} 分享失败:`, errorData.error || errorData.message)
+        continue
+      }
+
+      const data = await response.json()
+
+      if (data.success && data.data.results && data.data.results.length > 0) {
+        const result = data.data.results[0]
+
+        if (result.success) {
+          // 更新全部Token数据缓存
+          const allIndex = allTokens.value.findIndex(t => t.id === token.id)
+          if (allIndex > -1) {
+            allTokens.value[allIndex] = {
+              ...allTokens.value[allIndex],
+              is_shared: true,
+              share_info: JSON.stringify({
+                recharge_card: result.recharge_card,
+                deactivation_code: result.deactivation_code
+              }),
+              updated_at: new Date().toISOString()
+            }
+          }
+
+          // 更新当前页显示的Token数据
+          const index = tokens.value.findIndex(t => t.id === token.id)
+          if (index > -1) {
+            tokens.value[index] = {
+              ...tokens.value[index],
+              is_shared: true,
+              share_info: JSON.stringify({
+                recharge_card: result.recharge_card,
+                deactivation_code: result.deactivation_code
+              }),
+              updated_at: new Date().toISOString()
+            }
+          }
+
+          batchShareResults.value.successful++
+        } else {
+          batchShareResults.value.failed++
+          console.error(`Token ${token.id} 分享失败:`, result.error || '未知错误')
+        }
+      } else {
+        batchShareResults.value.failed++
+        console.error(`Token ${token.id} 分享失败:`, data.error || data.message || '未知错误')
+      }
+    } catch (error) {
+      batchShareResults.value.failed++
+      console.error(`Token ${token.id} 分享错误:`, error)
+    }
+
+    // 添加延迟，避免服务器压力
+    if (i < tokensToShare.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+  }
+
+  // 分享完成
+  isBatchSharing.value = false
+
+  // 显示结果
+  const { successful, failed, total } = batchShareResults.value
+  toast.success(`批量分享完成！成功: ${successful}, 失败: ${failed}, 总计: ${total}`)
+
+  // 延迟关闭模态框
+  setTimeout(() => {
+    closeBatchShareModal()
+    // 如果是选择模式，操作完成后清除选择
+    if (isSelectMode.value) {
+      selectedTokenIds.value.clear()
+    }
+  }, 2000)
 }
 
 // 批量刷新相关方法
@@ -4025,6 +4184,64 @@ const updateTokenInArrays = (updatedToken: Token) => {
 }
 
 // 分享相关方法
+const confirmShareToken = async (token: Token) => {
+  try {
+    // 使用批量分享接口，传入单个Token ID
+    const response = await apiPost('/api/tokens/batch-share', { tokenIds: [token.id] })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      toast.error(errorData.error || errorData.message || 'Token分享失败')
+      return
+    }
+
+    const data = await response.json()
+
+    if (data.success && data.data.results && data.data.results.length > 0) {
+      const result = data.data.results[0]
+
+      if (result.success) {
+        toast.success('Token分享成功！')
+
+        // 局部更新Token数据，只更新分享相关字段
+        const updatedFields = {
+          share_info: JSON.stringify({
+            recharge_card: result.recharge_card,
+            deactivation_code: result.deactivation_code
+          }),
+          is_shared: true,
+          updated_at: new Date().toISOString()
+        }
+
+        // 更新全部Token数据缓存
+        const allIndex = allTokens.value.findIndex(t => t.id === token.id)
+        if (allIndex > -1) {
+          allTokens.value[allIndex] = { ...allTokens.value[allIndex], ...updatedFields }
+        }
+
+        // 更新当前页显示的Token数据
+        const index = tokens.value.findIndex(t => t.id === token.id)
+        if (index > -1) {
+          tokens.value[index] = { ...tokens.value[index], ...updatedFields }
+        }
+
+        // 关闭编辑模态框
+        closeEditModal()
+        // 显示分享信息
+        const updatedToken = { ...token, ...updatedFields }
+        showShareInfoModal(updatedToken)
+      } else {
+        toast.error(result.error || 'Token分享失败')
+      }
+    } else {
+      toast.error(data.error || data.message || 'Token分享失败')
+    }
+  } catch (error) {
+    console.error('Share token error:', error)
+    toast.error('Token分享失败，请重试')
+  }
+}
+
 const shareToken = async (token: Token) => {
   try {
     // 使用批量分享接口，传入单个Token ID
@@ -4440,7 +4657,8 @@ i.refresh-spin {
 
 .card-selectable:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+  border-color: var(--bs-primary);
 }
 
 .card-selectable.border-primary {
