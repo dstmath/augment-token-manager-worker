@@ -257,7 +257,7 @@
                         isValidating && validatingToken?.id === token.id ? 'bg-warning text-white' :
                         getTokenStatusClass(token)]"
                       @click="handleStatusClick(token)"
-                      :title="isTokenShared(token) ? '点击查看分享信息和激活码' : (getTokenStatus(token) === '失效' ? '点击选择操作（验证或重新激活）' : '点击验证Token状态')"
+                      :title="getTokenStatus(token) === '失效' ? '点击选择操作（验证或重新激活）' : '点击验证Token状态'"
                     >
                       <span v-if="isValidating && validatingToken?.id === token.id" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
                       {{ isValidating && validatingToken?.id === token.id ? '验证中' : getTokenStatus(token) }}
@@ -390,7 +390,7 @@
                         isValidating && validatingToken?.id === token.id ? 'bg-warning text-white' :
                         getTokenStatusClass(token)]"
                       @click="handleStatusClick(token)"
-                      :title="isTokenShared(token) ? '点击查看分享信息和激活码' : (getTokenStatus(token) === '失效' ? '点击选择操作（验证或重新激活）' : '点击验证Token状态')"
+                      :title="getTokenStatus(token) === '失效' ? '点击选择操作（验证或重新激活）' : '点击验证Token状态'"
                     >
                       <span v-if="isValidating && validatingToken?.id === token.id" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
                       {{ isValidating && validatingToken?.id === token.id ? '验证中' : getTokenStatus(token) }}
@@ -767,7 +767,7 @@
                           <button
                             type="button"
                             class="btn btn-primary"
-                            @click="getVerificationCode"
+                            @click="() => getVerificationCode()"
                             :disabled="isGettingVerificationCode"
                             title="获取验证码"
                           >
@@ -1898,17 +1898,16 @@ const newToken = ref<NewToken>({
   email: '',
   token: ''
 })
-const editingToken = ref<{
-  id?: string
-  tenant_url: string
-  access_token: string
-  portal_url: string
-  email_note: string
-}>({
+const editingToken = ref<Token>({
+  id: '',
   tenant_url: '',
   access_token: '',
   portal_url: '',
-  email_note: ''
+  email_note: '',
+  ban_status: '',
+  portal_info: '',
+  created_at: '',
+  updated_at: ''
 })
 const deletingToken = ref<Token | null>(null)
 
@@ -2807,7 +2806,6 @@ const showGetTokenModal = (isReactivate = false) => {
   tokenData.value = {
     tenant_url: '',
     access_token: '',
-    email: '',
     portal_url: ''
   }
   emailNote.value = ''
@@ -3197,14 +3195,14 @@ const executeToken = (token: Token) => {
     return
   }
 
-  if (status === '耗尽') {
+  if (status === '燃尽') {
     toast.warning('Token次数已耗尽，无法执行')
     return
   }
 
-  // 未验证的Token也允许执行，只是给出提示
-  if (status === '未验证') {
-    toast.info('Token未验证，但仍可尝试执行')
+  // 未知状态的Token也允许执行，只是给出提示
+  if (status === '未知') {
+    toast.info('Token状态未知，但仍可尝试执行')
   }
 
   currentExecuteToken.value = token
@@ -3299,7 +3297,13 @@ const showEditTokenModal = async (token: Token) => {
         tenant_url: data.data.tenant_url,
         access_token: data.data.access_token,
         portal_url: data.data.portal_url,
-        email_note: data.data.email_note
+        email_note: data.data.email_note,
+        ban_status: data.data.ban_status || '',
+        portal_info: data.data.portal_info || '',
+        created_at: data.data.created_at || '',
+        updated_at: data.data.updated_at || '',
+        share_info: data.data.share_info,
+        is_shared: data.data.is_shared
       }
       showEditModal.value = true
     } else {
@@ -3314,10 +3318,15 @@ const showEditTokenModal = async (token: Token) => {
 const closeEditModal = () => {
   showEditModal.value = false
   editingToken.value = {
+    id: '',
     tenant_url: '',
     access_token: '',
     portal_url: '',
-    email_note: ''
+    email_note: '',
+    ban_status: '',
+    portal_info: '',
+    created_at: '',
+    updated_at: ''
   }
 }
 
@@ -3451,7 +3460,10 @@ const confirmValidateToken = async () => {
   const currentStatus = getTokenStatus(tokenToValidate)
   if (currentStatus !== '正常' && currentStatus !== '未知' && currentStatus !== '失效') {
     toast.error(`Token状态为"${currentStatus}"，无法进行验证`)
-    cancelValidateToken()
+    // 取消验证
+    isValidating.value = false
+    validatingToken.value = null
+    showValidateConfirmModal.value = false
     return
   }
 
@@ -3585,7 +3597,7 @@ const confirmBatchValidate = async () => {
 }
 
 // 回退到逐个验证的方法
-const fallbackIndividualValidation = async (tokensToValidate) => {
+const fallbackIndividualValidation = async (tokensToValidate: Token[]) => {
   // 重置结果
   batchValidateResults.value = {
     valid: 0,
@@ -3908,21 +3920,16 @@ const formatTimestamp = (timestamp: string) => {
   return new Date(timestamp).toLocaleTimeString()
 }
 
-// 处理状态点击事件
+// 处理状态点击事件 - 只处理Token运行状态，不处理分享状态
 const handleStatusClick = (token: Token) => {
   const status = getTokenStatus(token)
-
-  // 如果Token已分享，显示分享信息
-  if (isTokenShared(token)) {
-    showShareInfoModal(token)
-    return
-  }
 
   if (status === '失效') {
     // 失效状态：显示选择菜单（验证或重新激活）
     showInvalidTokenActionModal.value = true
     selectedInvalidToken.value = token
   } else {
+    // 其他状态直接验证Token
     showValidateModal(token)
   }
 }
