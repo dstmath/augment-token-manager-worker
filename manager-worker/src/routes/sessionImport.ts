@@ -28,11 +28,16 @@ export async function importTokenFromSessionHandler(
       return createErrorResponse('Session token is required', 400);
     }
 
+    console.log('Starting session import for user:', user.id);
+
     // Extract token information from session
     const tokenInfo = await extractTokenFromSession(body.session_token);
 
     if (!tokenInfo) {
-      return createErrorResponse('Failed to extract token from session. Please ensure you are logged in to Augment Code.', 400);
+      return createErrorResponse(
+        'Failed to extract token from session. Please check: 1) Session cookie is valid and not expired, 2) You are logged in to auth.augmentcode.com, 3) Account is not banned. Check server logs for details.',
+        400
+      );
     }
 
     // Validate extracted token data
@@ -43,6 +48,8 @@ export async function importTokenFromSessionHandler(
     if (!tokenInfo.tenant_url) {
       return createErrorResponse('Invalid session: tenant URL not found', 400);
     }
+
+    console.log('Successfully extracted token, creating record...');
 
     // Create token record
     const tokenService = new TokenService(env);
@@ -81,41 +88,84 @@ async function extractTokenFromSession(sessionToken: string): Promise<{
   email?: string;
 } | null> {
   try {
-    // Clean the session token
-    const cleanSession = sessionToken.trim();
+    // Clean the session token and decode if needed
+    let cleanSession = sessionToken.trim();
+
+    // Try to decode if it's URL encoded
+    try {
+      const decoded = decodeURIComponent(cleanSession);
+      if (decoded !== cleanSession) {
+        console.log('Session token was URL encoded, using decoded version');
+        cleanSession = decoded;
+      }
+    } catch (e) {
+      // Not URL encoded, use as is
+    }
+
+    console.log('Starting session import, session length:', cleanSession.length);
 
     // Generate PKCE parameters
     const codeVerifier = generateRandomString(32);
     const codeChallenge = await generateCodeChallenge(codeVerifier);
     const state = generateRandomString(42);
-    const clientId = 'vscode-augment';
+    const clientId = 'v'; // Augment OAuth client ID
     const authBaseUrl = 'https://auth.augmentcode.com';
 
     // Step 1: Access terms-accept page with session cookie to get authorization code
     const termsUrl = `${authBaseUrl}/terms-accept?response_type=code&code_challenge=${codeChallenge}&client_id=${clientId}&state=${state}&prompt=login`;
 
+    console.log('Fetching terms page...');
     const termsResponse = await fetch(termsUrl, {
       method: 'GET',
       headers: {
         'Cookie': `session=${cleanSession}`,
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
       },
     });
 
+    console.log('Terms page response status:', termsResponse.status);
+
     if (!termsResponse.ok) {
-      console.error('Failed to fetch terms page:', termsResponse.status);
+      console.error('Failed to fetch terms page:', termsResponse.status, termsResponse.statusText);
+      const errorText = await termsResponse.text();
+      console.error('Error response:', errorText.substring(0, 500));
       return null;
     }
 
     const html = await termsResponse.text();
+    console.log('Received HTML, length:', html.length);
+
+    // Log a snippet of the HTML to debug
+    console.log('HTML snippet:', html.substring(0, 500));
 
     // Step 2: Extract code, state, and tenant_url from HTML using regex
-    const codeMatch = html.match(/code:\s*"([^"]+)"/);
-    const stateMatch = html.match(/state:\s*"([^"]+)"/);
-    const tenantUrlMatch = html.match(/tenant_url:\s*"([^"]+)"/);
+    // Try multiple regex patterns
+    let codeMatch = html.match(/code:\s*"([^"]+)"/);
+    let stateMatch = html.match(/state:\s*"([^"]+)"/);
+    let tenantUrlMatch = html.match(/tenant_url:\s*"([^"]+)"/);
+
+    // Try alternative patterns if first attempt fails
+    if (!codeMatch) {
+      codeMatch = html.match(/code["\s:]+([a-zA-Z0-9_-]+)/);
+    }
+    if (!stateMatch) {
+      stateMatch = html.match(/state["\s:]+([a-zA-Z0-9_-]+)/);
+    }
+    if (!tenantUrlMatch) {
+      tenantUrlMatch = html.match(/tenant_url["\s:]+(https?:\/\/[^"'\s]+)/);
+    }
 
     if (!codeMatch || !stateMatch || !tenantUrlMatch) {
       console.error('Failed to extract OAuth parameters from HTML');
+      console.error('Code match:', !!codeMatch, 'State match:', !!stateMatch, 'Tenant URL match:', !!tenantUrlMatch);
+
+      // Check if we got a login page instead
+      if (html.includes('login') || html.includes('sign in') || html.includes('Sign In')) {
+        console.error('Received login page - session may be invalid or expired');
+      }
+
       return null;
     }
 
@@ -123,7 +173,11 @@ async function extractTokenFromSession(sessionToken: string): Promise<{
     const extractedState = stateMatch[1];
     const tenantUrl = tenantUrlMatch[1];
 
-    console.log('Extracted OAuth parameters:', { code: code.substring(0, 10) + '...', tenantUrl });
+    console.log('Extracted OAuth parameters:', {
+      code: code.substring(0, 10) + '...',
+      state: extractedState.substring(0, 10) + '...',
+      tenantUrl
+    });
 
     // Step 3: Exchange authorization code for access token
     const tokenUrl = `${tenantUrl}token`;
@@ -135,6 +189,7 @@ async function extractTokenFromSession(sessionToken: string): Promise<{
       code: code,
     };
 
+    console.log('Exchanging code for token at:', tokenUrl);
     const tokenResponse = await fetch(tokenUrl, {
       method: 'POST',
       headers: {
@@ -143,18 +198,24 @@ async function extractTokenFromSession(sessionToken: string): Promise<{
       body: JSON.stringify(tokenPayload),
     });
 
+    console.log('Token exchange response status:', tokenResponse.status);
+
     if (!tokenResponse.ok) {
-      console.error('Failed to exchange token:', tokenResponse.status);
+      console.error('Failed to exchange token:', tokenResponse.status, tokenResponse.statusText);
+      const errorText = await tokenResponse.text();
+      console.error('Token exchange error:', errorText);
       return null;
     }
 
     const tokenData = await tokenResponse.json() as any;
+    console.log('Token data received:', { hasAccessToken: !!tokenData.access_token });
 
     if (!tokenData.access_token) {
-      console.error('No access token in response');
+      console.error('No access token in response:', tokenData);
       return null;
     }
 
+    console.log('Successfully extracted token from session');
     return {
       access_token: tokenData.access_token,
       tenant_url: tenantUrl,
@@ -162,7 +223,11 @@ async function extractTokenFromSession(sessionToken: string): Promise<{
       email: undefined,
     };
   } catch (error) {
-    console.error('Failed to extract token from session:', error);
+    console.error('Failed to extract token from session - Exception:', error);
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     return null;
   }
 }
