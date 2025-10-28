@@ -71,8 +71,8 @@ export async function importTokenFromSessionHandler(
 }
 
 /**
- * Extract token information from ACE session token
- * The session token is typically stored in browser cookies or localStorage
+ * Extract token information from ACE session cookie
+ * This uses the Augment OAuth flow with the session cookie
  */
 async function extractTokenFromSession(sessionToken: string): Promise<{
   access_token: string;
@@ -81,60 +81,122 @@ async function extractTokenFromSession(sessionToken: string): Promise<{
   email?: string;
 } | null> {
   try {
-    // Try to parse the session token as JWT or base64 encoded data
-    // ACE typically stores session data in a specific format
-    
-    // First, try to decode as base64
-    let sessionData: any;
-    
-    try {
-      // Remove any Bearer prefix if present
-      const cleanToken = sessionToken.replace(/^Bearer\s+/i, '');
-      
-      // Try to parse as JSON directly (if it's a JSON string)
-      try {
-        sessionData = JSON.parse(cleanToken);
-      } catch {
-        // Try base64 decode
-        const decoded = atob(cleanToken);
-        sessionData = JSON.parse(decoded);
-      }
-    } catch {
-      // If not base64, try to parse JWT
-      const parts = sessionToken.split('.');
-      if (parts.length === 3) {
-        // JWT format: header.payload.signature
-        const payload = parts[1];
-        // Add padding if needed
-        const paddedPayload = payload + '='.repeat((4 - (payload.length % 4)) % 4);
-        const decoded = atob(paddedPayload.replace(/-/g, '+').replace(/_/g, '/'));
-        sessionData = JSON.parse(decoded);
-      } else {
-        return null;
-      }
+    // Clean the session token
+    const cleanSession = sessionToken.trim();
+
+    // Generate PKCE parameters
+    const codeVerifier = generateRandomString(32);
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    const state = generateRandomString(42);
+    const clientId = 'vscode-augment';
+    const authBaseUrl = 'https://auth.augmentcode.com';
+
+    // Step 1: Access terms-accept page with session cookie to get authorization code
+    const termsUrl = `${authBaseUrl}/terms-accept?response_type=code&code_challenge=${codeChallenge}&client_id=${clientId}&state=${state}&prompt=login`;
+
+    const termsResponse = await fetch(termsUrl, {
+      method: 'GET',
+      headers: {
+        'Cookie': `session=${cleanSession}`,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+    });
+
+    if (!termsResponse.ok) {
+      console.error('Failed to fetch terms page:', termsResponse.status);
+      return null;
     }
 
-    // Extract token information from session data
-    // ACE session typically contains: access_token, tenant_url, and optionally portal_url
-    const access_token = sessionData.access_token || sessionData.accessToken || sessionData.token;
-    const tenant_url = sessionData.tenant_url || sessionData.tenantUrl || sessionData.url;
-    const portal_url = sessionData.portal_url || sessionData.portalUrl;
-    const email = sessionData.email || sessionData.user?.email;
+    const html = await termsResponse.text();
 
-    if (!access_token || !tenant_url) {
+    // Step 2: Extract code, state, and tenant_url from HTML using regex
+    const codeMatch = html.match(/code:\s*"([^"]+)"/);
+    const stateMatch = html.match(/state:\s*"([^"]+)"/);
+    const tenantUrlMatch = html.match(/tenant_url:\s*"([^"]+)"/);
+
+    if (!codeMatch || !stateMatch || !tenantUrlMatch) {
+      console.error('Failed to extract OAuth parameters from HTML');
+      return null;
+    }
+
+    const code = codeMatch[1];
+    const extractedState = stateMatch[1];
+    const tenantUrl = tenantUrlMatch[1];
+
+    console.log('Extracted OAuth parameters:', { code: code.substring(0, 10) + '...', tenantUrl });
+
+    // Step 3: Exchange authorization code for access token
+    const tokenUrl = `${tenantUrl}token`;
+    const tokenPayload = {
+      grant_type: 'authorization_code',
+      client_id: clientId,
+      code_verifier: codeVerifier,
+      redirect_uri: '',
+      code: code,
+    };
+
+    const tokenResponse = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(tokenPayload),
+    });
+
+    if (!tokenResponse.ok) {
+      console.error('Failed to exchange token:', tokenResponse.status);
+      return null;
+    }
+
+    const tokenData = await tokenResponse.json() as any;
+
+    if (!tokenData.access_token) {
+      console.error('No access token in response');
       return null;
     }
 
     return {
-      access_token,
-      tenant_url,
-      portal_url,
-      email,
+      access_token: tokenData.access_token,
+      tenant_url: tenantUrl,
+      portal_url: undefined,
+      email: undefined,
     };
   } catch (error) {
     console.error('Failed to extract token from session:', error);
     return null;
   }
+}
+
+/**
+ * Generate a random string for PKCE
+ */
+function generateRandomString(length: number): string {
+  const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+  let result = '';
+  const randomValues = new Uint8Array(length);
+  crypto.getRandomValues(randomValues);
+
+  for (let i = 0; i < length; i++) {
+    result += charset[randomValues[i] % charset.length];
+  }
+
+  return result;
+}
+
+/**
+ * Generate code challenge for PKCE
+ */
+async function generateCodeChallenge(verifier: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+
+  // Convert to base64url
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(hash)));
+  return base64
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
 }
 
 /**

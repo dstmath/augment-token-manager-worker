@@ -1687,29 +1687,31 @@
               <div class="alert alert-info">
                 <h4 class="alert-title">
                   <i class="bi bi-info-circle me-2"></i>
-                  如何获取Session Token
+                  如何获取 Session Cookie
                 </h4>
                 <div class="text-muted">
-                  <p>1. 在浏览器中登录 Augment Code (augmentcode.com)</p>
-                  <p>2. 打开浏览器开发者工具 (F12)</p>
-                  <p>3. 进入 Application/Storage → Cookies 或 Local Storage</p>
-                  <p>4. 查找名为 <code>augment_session</code> 或类似的 session token</p>
-                  <p>5. 复制完整的 token 值并粘贴到下方输入框</p>
+                  <p><strong>步骤 1:</strong> 在浏览器中登录 <a href="https://auth.augmentcode.com" target="_blank">auth.augmentcode.com</a></p>
+                  <p><strong>步骤 2:</strong> 打开浏览器开发者工具 (按 F12 键)</p>
+                  <p><strong>步骤 3:</strong> 切换到 <strong>Application</strong> (Chrome) 或 <strong>Storage</strong> (Firefox) 标签</p>
+                  <p><strong>步骤 4:</strong> 在左侧菜单中找到 <strong>Cookies</strong> → <strong>https://auth.augmentcode.com</strong></p>
+                  <p><strong>步骤 5:</strong> 找到名为 <code>session</code> 的 Cookie，复制它的 <strong>Value</strong> 值</p>
+                  <p><strong>步骤 6:</strong> 将复制的值粘贴到下方输入框中</p>
+                  <p class="mb-0"><small class="text-warning">⚠️ 注意：只需要复制 session cookie 的值，不要包含 "session=" 前缀</small></p>
                 </div>
               </div>
 
               <form @submit.prevent="importFromSession">
                 <div class="mb-3">
-                  <label class="form-label">Session Token</label>
+                  <label class="form-label">Session Cookie 值</label>
                   <textarea
                     v-model="sessionImport.sessionToken"
                     class="form-control font-monospace"
-                    placeholder="请粘贴从浏览器获取的 Session Token"
+                    placeholder="粘贴从 auth.augmentcode.com 获取的 session cookie 值"
                     rows="6"
                     required
                   ></textarea>
                   <div class="form-hint">
-                    Session Token 通常是一个长字符串，可能是 JWT 格式或 Base64 编码
+                    这是一个来自 auth.augmentcode.com 域名下的 session cookie 值
                   </div>
                 </div>
 
