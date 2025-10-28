@@ -5,10 +5,9 @@
  * Based on augment-token-mng implementation.
  */
 
-import { Env, AuthenticatedRequest, CreditConsumptionRequest, BatchCreditConsumptionResponse, CreditConsumptionResponse } from '../types/index';
-import { createSuccessResponse, createErrorResponse } from '../utils/response';
-import { parseJsonBody } from '../utils/request';
-import { getCurrentUser } from '../middleware/auth';
+import { Env, AuthenticatedRequest, CreditConsumptionRequest, BatchCreditConsumptionResponse, CreditConsumptionResponse } from '../types/index.js';
+import { createSuccessResponse, createErrorResponse, parseJsonBody } from '../utils/response.js';
+import { getCurrentUser } from '../middleware/auth.js';
 
 /**
  * Exchange auth session for app session
