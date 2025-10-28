@@ -51,7 +51,7 @@ export async function importTokenFromSessionHandler(
 
     console.log('Successfully extracted token, creating record...');
 
-    // Create token record
+    // Create token record with auth_session for credit tracking
     const tokenService = new TokenService(env);
     const token = await tokenService.createToken(
       {
@@ -59,6 +59,7 @@ export async function importTokenFromSessionHandler(
         access_token: tokenInfo.access_token,
         portal_url: tokenInfo.portal_url || '',
         email_note: body.email_note || tokenInfo.email || '',
+        auth_session: body.session_token, // Save auth session for credit consumption tracking
       },
       user.id
     );
@@ -324,6 +325,7 @@ export async function batchImportFromSessionsHandler(
             access_token: tokenInfo.access_token,
             portal_url: tokenInfo.portal_url || '',
             email_note: sessionReq.email_note || tokenInfo.email || '',
+            auth_session: sessionReq.session_token, // Save auth session for credit tracking
           },
           user.id
         );

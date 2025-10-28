@@ -274,7 +274,17 @@
                     </div>
                   </div>
                   <div class="col-6">
-                    <div class="text-muted small">剩余次数</div>
+                    <div class="text-muted small d-flex align-items-center justify-content-between">
+                      <span>剩余次数</span>
+                      <button
+                        v-if="token.auth_session && getRemainingCredits(token) !== '-'"
+                        @click.stop="showCreditUsageModal(token)"
+                        class="btn btn-sm btn-link p-0 text-decoration-none"
+                        title="查看 Credit 使用统计"
+                      >
+                        <i class="bi bi-graph-up"></i>
+                      </button>
+                    </div>
                     <div :class="['h4', 'mb-0', getCreditsColorClass(token)]">
                       {{ getRemainingCredits(token) }}
                     </div>
@@ -1822,6 +1832,15 @@
       </div>
     </div>
   </div>
+
+  <!-- Credit Usage Modal -->
+  <CreditUsageModal
+    v-if="creditUsageModalVisible"
+    :auth-session="selectedTokenForCredit?.auth_session || ''"
+    :credits-balance="getCreditsBalance(selectedTokenForCredit)"
+    @close="closeCreditUsageModal"
+    @refresh-balance="refreshTokenAfterCreditCheck"
+  />
 </div>
 </template>
 
@@ -1829,6 +1848,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { toast } from '../utils/toast'
 import { apiGet, apiPost, apiPut, apiDelete } from '../utils/api'
+import CreditUsageModal from '../components/CreditUsageModal.vue'
 
 
 
@@ -1844,6 +1864,7 @@ interface Token {
   updated_at: string
   share_info?: string
   is_shared?: boolean
+  auth_session?: string
 }
 
 interface PortalInfo {
@@ -1909,6 +1930,10 @@ const validatingToken = ref<Token | null>(null)
 const isValidating = ref(false)
 const refreshingToken = ref<Token | null>(null)
 const isRefreshing = ref(false)
+
+// Credit Usage Modal 状态
+const creditUsageModalVisible = ref(false)
+const selectedTokenForCredit = ref<Token | null>(null)
 
 // 视图模式 - 从本地存储读取，默认为卡片视图
 const viewMode = ref<'card' | 'table'>(
@@ -2443,6 +2468,34 @@ const getRemainingCredits = (token: Token): string => {
   const portalInfo = parsePortalInfo(token.portal_info)
   if (!portalInfo || portalInfo.credits_balance === undefined) return '-'
   return portalInfo.credits_balance.toString()
+}
+
+// Credit Usage Modal 相关方法
+const showCreditUsageModal = (token: Token) => {
+  if (!token.auth_session) {
+    toast.warning('此 Token 没有关联的 auth session，无法查看 Credit 使用统计')
+    return
+  }
+  selectedTokenForCredit.value = token
+  creditUsageModalVisible.value = true
+}
+
+const closeCreditUsageModal = () => {
+  creditUsageModalVisible.value = false
+  selectedTokenForCredit.value = null
+}
+
+const getCreditsBalance = (token: Token | null): number => {
+  if (!token) return 0
+  const portalInfo = parsePortalInfo(token.portal_info)
+  return portalInfo?.credits_balance || 0
+}
+
+const refreshTokenAfterCreditCheck = async () => {
+  if (selectedTokenForCredit.value) {
+    // 刷新当前 token 的 portal info
+    await refreshTokenInfo(selectedTokenForCredit.value)
+  }
 }
 
 const getTokenStatus = (token: Token): '正常' | '失效' | '封禁' | '过期' | '燃尽' | '未知' => {

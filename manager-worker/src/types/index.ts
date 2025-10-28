@@ -64,6 +64,7 @@ export interface TokenRecord {
   created_by: string;
   share_info?: string; // JSON string containing recharge_card and deactivation_code
   is_shared?: boolean; // Whether the token is shared to public pool
+  auth_session?: string; // Auth session cookie for credit consumption tracking
 }
 
 // UUID management types
@@ -145,11 +146,37 @@ export interface CreateTokenRequest {
   access_token: string;
   portal_url?: string;
   email_note?: string;
+  auth_session?: string;
 }
 
 export interface SessionImportRequest {
   session_token: string;
   email_note?: string;
+}
+
+// Credit Consumption Types
+export interface DateRange {
+  start_date_iso: string;
+  end_date_iso: string;
+}
+
+export interface CreditDataPoint {
+  group_key?: string; // Model name
+  date_range?: DateRange;
+  credits_consumed: string;
+}
+
+export interface CreditConsumptionResponse {
+  data_points: CreditDataPoint[];
+}
+
+export interface BatchCreditConsumptionResponse {
+  stats_data: CreditConsumptionResponse;
+  chart_data: CreditConsumptionResponse;
+}
+
+export interface CreditConsumptionRequest {
+  auth_session: string;
 }
 
 export interface UpdateTokenRequest {
@@ -160,6 +187,7 @@ export interface UpdateTokenRequest {
   ban_status?: string;
   share_info?: string;
   is_shared?: boolean;
+  auth_session?: string;
 }
 
 export interface CreateUuidRequest {

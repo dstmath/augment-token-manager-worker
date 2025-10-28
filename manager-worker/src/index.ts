@@ -37,6 +37,9 @@ import {
   importTokenFromSessionHandler,
   batchImportFromSessionsHandler
 } from './routes/sessionImport.js';
+import {
+  getBatchCreditConsumptionHandler
+} from './routes/creditConsumption.js';
 
 /**
  * Route definitions
@@ -76,6 +79,9 @@ const routes: Route[] = [
   { method: 'GET', path: '/api/email/domains', handler: getEmailDomainsHandler, requiresAuth: true },
   { method: 'POST', path: '/api/email/generate', handler: generateEmailHandler, requiresAuth: true },
   { method: 'GET', path: '/api/email/verification-code', handler: getVerificationCodeHandler, requiresAuth: true },
+
+  // Credit consumption routes (authenticated)
+  { method: 'POST', path: '/api/credits/consumption', handler: getBatchCreditConsumptionHandler, requiresAuth: true },
 ];
 
 /**
