@@ -68,7 +68,7 @@ export async function importTokenFromSessionHandler(
     if (token.portal_url) {
       console.log('Refreshing portal info for newly imported token...');
       try {
-        token = await tokenService.refreshPortalInfo(token.id);
+        token = await tokenService.refreshTokenInfo(token.id) || token;
         console.log('Portal info refreshed successfully');
       } catch (error) {
         console.error('Failed to refresh portal info:', error);
@@ -345,7 +345,7 @@ export async function batchImportFromSessionsHandler(
         // Automatically refresh portal info after creation
         if (token.portal_url) {
           try {
-            token = await tokenService.refreshPortalInfo(token.id);
+            token = await tokenService.refreshTokenInfo(token.id) || token;
           } catch (error) {
             console.error(`Failed to refresh portal info for token ${token.id}:`, error);
             // Don't fail the import if portal refresh fails

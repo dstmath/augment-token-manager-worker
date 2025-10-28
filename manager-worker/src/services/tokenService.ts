@@ -438,11 +438,27 @@ export class TokenService {
       // 第二步：获取账户余额信息
       const ledgerInfo = await this.getLedgerSummary(customerInfo, tokenParam);
 
-      // 第三步：更新 portal_info 和状态
+      // 第三步：计算过期时间（effective_date + 1个月）
+      let expiryDate = '';
+      if (ledgerInfo.credit_blocks && ledgerInfo.credit_blocks.length > 0) {
+        const firstBlock = ledgerInfo.credit_blocks[0];
+        if (firstBlock.effective_date) {
+          try {
+            const effectiveDate = new Date(firstBlock.effective_date);
+            // 加 1 个月
+            effectiveDate.setMonth(effectiveDate.getMonth() + 1);
+            expiryDate = effectiveDate.toISOString();
+          } catch (e) {
+            console.error('Failed to parse effective_date:', e);
+          }
+        }
+      }
+
+      // 第四步：更新 portal_info 和状态
       const portalInfo = {
         credits_balance: this.parseCreditsBalance(ledgerInfo.credits_balance),
         is_active: ledgerInfo.credit_blocks.length > 0 ? ledgerInfo.credit_blocks[0].is_active : false,
-        expiry_date: ledgerInfo.credit_blocks.length > 0 ? ledgerInfo.credit_blocks[0].expiry_date : '',
+        expiry_date: expiryDate,
       };
 
       // 刷新操作只更新portal_info，不修改ban_status
