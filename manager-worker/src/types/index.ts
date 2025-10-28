@@ -147,6 +147,11 @@ export interface CreateTokenRequest {
   email_note?: string;
 }
 
+export interface SessionImportRequest {
+  session_token: string;
+  email_note?: string;
+}
+
 export interface UpdateTokenRequest {
   tenant_url?: string;
   access_token?: string;

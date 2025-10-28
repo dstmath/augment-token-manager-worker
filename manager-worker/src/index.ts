@@ -33,6 +33,10 @@ import {
   getVerificationCodeHandler,
   emailHealthHandler
 } from './routes/email.js';
+import {
+  importTokenFromSessionHandler,
+  batchImportFromSessionsHandler
+} from './routes/sessionImport.js';
 
 /**
  * Route definitions
@@ -54,6 +58,8 @@ const routes: Route[] = [
   { method: 'GET', path: '/api/tokens', handler: getTokensHandler, requiresAuth: true },
   { method: 'POST', path: '/api/tokens', handler: createTokenHandler, requiresAuth: true },
   { method: 'POST', path: '/api/tokens/batch-import', handler: batchImportTokensHandler, requiresAuth: true },
+  { method: 'POST', path: '/api/tokens/import-from-session', handler: importTokenFromSessionHandler, requiresAuth: true },
+  { method: 'POST', path: '/api/tokens/batch-import-from-sessions', handler: batchImportFromSessionsHandler, requiresAuth: true },
   { method: 'GET', path: '/api/tokens/stats', handler: getTokenStatsHandler, requiresAuth: true },
   { method: 'GET', path: '/api/tokens/:id', handler: getTokenByIdHandler, requiresAuth: true },
   { method: 'PUT', path: '/api/tokens/:id', handler: updateTokenHandler, requiresAuth: true },

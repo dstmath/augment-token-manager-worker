@@ -1533,6 +1533,16 @@
                   批量导入
                 </button>
               </li>
+              <li class="nav-item" role="presentation">
+                <button
+                  class="nav-link"
+                  :class="{ active: addTokenTab === 'session' }"
+                  @click="addTokenTab = 'session'"
+                  type="button"
+                >
+                  Session导入
+                </button>
+              </li>
             </ul>
 
             <!-- 单个添加标签页 -->
@@ -1671,6 +1681,49 @@
                 </div>
               </div>
             </div>
+
+            <!-- Session导入标签页 -->
+            <div v-if="addTokenTab === 'session'">
+              <div class="alert alert-info">
+                <h4 class="alert-title">
+                  <i class="bi bi-info-circle me-2"></i>
+                  如何获取Session Token
+                </h4>
+                <div class="text-muted">
+                  <p>1. 在浏览器中登录 Augment Code (augmentcode.com)</p>
+                  <p>2. 打开浏览器开发者工具 (F12)</p>
+                  <p>3. 进入 Application/Storage → Cookies 或 Local Storage</p>
+                  <p>4. 查找名为 <code>augment_session</code> 或类似的 session token</p>
+                  <p>5. 复制完整的 token 值并粘贴到下方输入框</p>
+                </div>
+              </div>
+
+              <form @submit.prevent="importFromSession">
+                <div class="mb-3">
+                  <label class="form-label">Session Token</label>
+                  <textarea
+                    v-model="sessionImport.sessionToken"
+                    class="form-control font-monospace"
+                    placeholder="请粘贴从浏览器获取的 Session Token"
+                    rows="6"
+                    required
+                  ></textarea>
+                  <div class="form-hint">
+                    Session Token 通常是一个长字符串，可能是 JWT 格式或 Base64 编码
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label">邮箱备注（可选）</label>
+                  <input
+                    type="text"
+                    v-model="sessionImport.emailNote"
+                    class="form-control"
+                    placeholder="可选：为导入的 Token 添加邮箱备注"
+                  >
+                </div>
+              </form>
+            </div>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn me-auto" @click="closeAddModal">
@@ -1695,6 +1748,16 @@
             >
               <i class="bi bi-upload me-1"></i>
               导入
+            </button>
+            <button
+              v-if="addTokenTab === 'session'"
+              type="button"
+              class="btn btn-primary"
+              @click="importFromSession"
+              :disabled="!sessionImport.sessionToken.trim()"
+            >
+              <i class="bi bi-download me-1"></i>
+              从Session导入
             </button>
           </div>
         </div>
@@ -2049,7 +2112,7 @@ const codeVerifier = ref('')
 const state = ref('')
 
 // 添加Token相关数据
-const addTokenTab = ref<'single' | 'batch'>('batch')
+const addTokenTab = ref<'single' | 'batch' | 'session'>('batch')
 const singleToken = ref({
   tenant_url: '',
   access_token: '',
@@ -2060,6 +2123,10 @@ const batchImport = ref<BatchImport>({
   type: 'json',
   csvFile: null,
   jsonData: ''
+})
+const sessionImport = ref({
+  sessionToken: '',
+  emailNote: ''
 })
 const isDragOver = ref(false)
 const csvFileInput = ref<HTMLInputElement | null>(null)
@@ -2993,6 +3060,10 @@ const showAddTokenModal = () => {
     csvFile: null,
     jsonData: ''
   }
+  sessionImport.value = {
+    sessionToken: '',
+    emailNote: ''
+  }
   isDragOver.value = false
   newToken.value = { email: '', token: '' }
   showAddModal.value = true
@@ -3006,6 +3077,10 @@ const closeAddModal = () => {
     access_token: '',
     portal_url: '',
     email_note: ''
+  }
+  sessionImport.value = {
+    sessionToken: '',
+    emailNote: ''
   }
   addTokenTab.value = 'batch'
 }
@@ -3187,6 +3262,39 @@ const importBatchTokens = async () => {
 // 保留原有的addToken方法以兼容
 const addToken = () => {
   addSingleToken()
+}
+
+// Session导入功能
+const importFromSession = async () => {
+  if (!sessionImport.value.sessionToken.trim()) {
+    toast.error('Session Token 不能为空')
+    return
+  }
+
+  try {
+    isLoading.value = true
+
+    const response = await apiPost('/api/tokens/import-from-session', {
+      session_token: sessionImport.value.sessionToken.trim(),
+      email_note: sessionImport.value.emailNote.trim() || undefined
+    })
+
+    const data = await response.json()
+
+    if (data.success) {
+      toast.success(data.message || 'Token 从 Session 导入成功')
+      closeAddModal()
+      // 重新加载Token列表
+      await refreshTokens()
+    } else {
+      toast.error(data.error || data.message || 'Session 导入失败')
+    }
+  } catch (error) {
+    console.error('Session导入失败:', error)
+    toast.error('Session 导入失败，请检查 Token 格式是否正确')
+  } finally {
+    isLoading.value = false
+  }
 }
 
 // 应用配置
