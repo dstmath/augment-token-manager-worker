@@ -392,7 +392,17 @@
                     {{ formatRemainingTime(token) }}
                   </td>
                   <td :class="['text-center', getCreditsColorClass(token)]">
-                    {{ getRemainingCredits(token) }}
+                    <div class="d-flex align-items-center justify-content-center gap-2">
+                      <span>{{ getRemainingCredits(token) }}</span>
+                      <button
+                        v-if="token.auth_session && getRemainingCredits(token) !== '-'"
+                        @click.stop="showCreditUsageModal(token)"
+                        class="btn btn-sm btn-link p-0 text-decoration-none"
+                        title="查看 Credit 使用统计"
+                      >
+                        <i class="bi bi-graph-up"></i>
+                      </button>
+                    </div>
                   </td>
                   <td class="text-center">
                     <span

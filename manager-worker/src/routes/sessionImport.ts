@@ -53,7 +53,7 @@ export async function importTokenFromSessionHandler(
 
     // Create token record with auth_session for credit tracking
     const tokenService = new TokenService(env);
-    const token = await tokenService.createToken(
+    let token = await tokenService.createToken(
       {
         tenant_url: tokenInfo.tenant_url,
         access_token: tokenInfo.access_token,
@@ -63,6 +63,18 @@ export async function importTokenFromSessionHandler(
       },
       user.id
     );
+
+    // Automatically refresh portal info after creation
+    if (token.portal_url) {
+      console.log('Refreshing portal info for newly imported token...');
+      try {
+        token = await tokenService.refreshPortalInfo(token.id);
+        console.log('Portal info refreshed successfully');
+      } catch (error) {
+        console.error('Failed to refresh portal info:', error);
+        // Don't fail the import if portal refresh fails
+      }
+    }
 
     return createSuccessResponse(
       token,
@@ -319,7 +331,7 @@ export async function batchImportFromSessionsHandler(
           continue;
         }
 
-        const token = await tokenService.createToken(
+        let token = await tokenService.createToken(
           {
             tenant_url: tokenInfo.tenant_url,
             access_token: tokenInfo.access_token,
@@ -329,6 +341,16 @@ export async function batchImportFromSessionsHandler(
           },
           user.id
         );
+
+        // Automatically refresh portal info after creation
+        if (token.portal_url) {
+          try {
+            token = await tokenService.refreshPortalInfo(token.id);
+          } catch (error) {
+            console.error(`Failed to refresh portal info for token ${token.id}:`, error);
+            // Don't fail the import if portal refresh fails
+          }
+        }
 
         results.success.push(token);
       } catch (error) {
