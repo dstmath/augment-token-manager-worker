@@ -100,8 +100,13 @@ export async function getTokenByIdHandler(
       return createNotFoundResponse('Token not found');
     }
     
-    // Check if user can access this token
-    if (user.role !== 'admin' && token.created_by !== user.id) {
+    // Allow access if:
+    // 1. User is admin, OR
+    // 2. Token was created by the current user, OR
+    // 3. Token was created via public API (created_by === 'public-import')
+    if (user.role !== 'admin' &&
+        token.created_by !== user.id &&
+        token.created_by !== 'public-import') {
       return createErrorResponse('Access denied', 403);
     }
     
@@ -189,7 +194,13 @@ export async function updateTokenHandler(
       return createNotFoundResponse('Token not found');
     }
     
-    if (user.role !== 'admin' && existingToken.created_by !== user.id) {
+    // Allow update if:
+    // 1. User is admin, OR
+    // 2. Token was created by the current user, OR
+    // 3. Token was created via public API (created_by === 'public-import')
+    if (user.role !== 'admin' &&
+        existingToken.created_by !== user.id &&
+        existingToken.created_by !== 'public-import') {
       return createErrorResponse('Access denied', 403);
     }
     
@@ -236,8 +247,14 @@ export async function deleteTokenHandler(
     if (!existingToken) {
       return createNotFoundResponse('Token not found');
     }
-    
-    if (user.role !== 'admin' && existingToken.created_by !== user.id) {
+
+    // Allow deletion if:
+    // 1. User is admin, OR
+    // 2. Token was created by the current user, OR
+    // 3. Token was created via public API (created_by === 'public-import')
+    if (user.role !== 'admin' &&
+        existingToken.created_by !== user.id &&
+        existingToken.created_by !== 'public-import') {
       return createErrorResponse('Access denied', 403);
     }
     
@@ -329,10 +346,16 @@ export async function validateTokenStatusHandler(
       return createNotFoundResponse('Token not found');
     }
     
-    if (user.role !== 'admin' && existingToken.created_by !== user.id) {
+    // Allow validation if:
+    // 1. User is admin, OR
+    // 2. Token was created by the current user, OR
+    // 3. Token was created via public API (created_by === 'public-import')
+    if (user.role !== 'admin' &&
+        existingToken.created_by !== user.id &&
+        existingToken.created_by !== 'public-import') {
       return createErrorResponse('Access denied', 403);
     }
-    
+
     const result = await tokenService.validateTokenStatus(tokenId);
 
     const message = result.isValid ? 'Token状态正常' : 'Token已失效，状态已更新';
@@ -389,8 +412,11 @@ export async function batchValidateTokensHandler(
         body.tokenIds.map(id => tokenService.getTokenById(id))
       );
 
+      // Allow access to tokens created by user or via public API
       const unauthorizedTokens = tokenChecks.filter(
-        token => token && token.created_by !== user.id
+        token => token &&
+                 token.created_by !== user.id &&
+                 token.created_by !== 'public-import'
       );
 
       if (unauthorizedTokens.length > 0) {
@@ -446,10 +472,16 @@ export async function refreshTokenHandler(
       return createNotFoundResponse('Token not found');
     }
     
-    if (user.role !== 'admin' && existingToken.created_by !== user.id) {
+    // Allow refresh if:
+    // 1. User is admin, OR
+    // 2. Token was created by the current user, OR
+    // 3. Token was created via public API (created_by === 'public-import')
+    if (user.role !== 'admin' &&
+        existingToken.created_by !== user.id &&
+        existingToken.created_by !== 'public-import') {
       return createErrorResponse('Access denied', 403);
     }
-    
+
     const refreshedToken = await tokenService.refreshTokenInfo(tokenId);
     
     if (!refreshedToken) {
@@ -539,8 +571,10 @@ async function handleBatchShare(
         continue; 
       }
 
-      // Check permission
-      if (user.role !== 'admin' && token.created_by !== user.id) {
+      // Check permission - allow access to tokens created by user or via public API
+      if (user.role !== 'admin' &&
+          token.created_by !== user.id &&
+          token.created_by !== 'public-import') {
         continue; // Skip tokens without permission
       }
 
@@ -737,7 +771,13 @@ export async function resetRechargeCardHandler(
     }
 
     // Check if user has permission to reset this token
-    if (user.role !== 'admin' && token.created_by !== user.id) {
+    // Allow reset if:
+    // 1. User is admin, OR
+    // 2. Token was created by the current user, OR
+    // 3. Token was created via public API (created_by === 'public-import')
+    if (user.role !== 'admin' &&
+        token.created_by !== user.id &&
+        token.created_by !== 'public-import') {
       return createErrorResponse('Permission denied', 403);
     }
 
