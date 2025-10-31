@@ -230,26 +230,44 @@ async function extractTokenFromSession(sessionToken: string): Promise<{
 
     console.log('Successfully extracted access token, now fetching portal URL and email...');
 
-    // Step 4: Exchange auth session for app session to get portal_url and email
+    // Step 4: Try to get portal_url and email using auth session
     let portalUrl: string | undefined = undefined;
     let email: string | undefined = undefined;
 
     try {
-      const appSession = await exchangeAuthSessionForAppSession(cleanSession);
-      console.log('App session obtained, fetching user info...');
+      // Method 1: Try to exchange auth session for app session
+      console.log('Method 1: Trying to exchange auth session for app session...');
+      try {
+        const appSession = await exchangeAuthSessionForAppSession(cleanSession);
+        console.log('App session obtained successfully, fetching user info...');
 
-      // Fetch user info and subscription info in parallel
-      const [userInfo, subscriptionInfo] = await Promise.all([
-        fetchAppUser(appSession),
-        fetchAppSubscription(appSession),
-      ]);
+        // Fetch user info and subscription info in parallel
+        const [userInfo, subscriptionInfo] = await Promise.all([
+          fetchAppUser(appSession),
+          fetchAppSubscription(appSession),
+        ]);
 
-      email = userInfo?.email;
-      portalUrl = subscriptionInfo?.portalUrl;
+        email = userInfo?.email;
+        portalUrl = subscriptionInfo?.portalUrl;
 
-      console.log('User info fetched:', { hasEmail: !!email, hasPortalUrl: !!portalUrl });
+        console.log('User info fetched via app session:', { hasEmail: !!email, hasPortalUrl: !!portalUrl });
+      } catch (appSessionError) {
+        console.error('Failed to use app session method:', appSessionError);
+
+        // Method 2: Try to fetch directly with auth session
+        console.log('Method 2: Trying to fetch directly with auth session...');
+        const [userInfo, subscriptionInfo] = await Promise.all([
+          fetchAppUserWithAuthSession(cleanSession),
+          fetchAppSubscriptionWithAuthSession(cleanSession),
+        ]);
+
+        email = userInfo?.email;
+        portalUrl = subscriptionInfo?.portalUrl;
+
+        console.log('User info fetched via auth session:', { hasEmail: !!email, hasPortalUrl: !!portalUrl });
+      }
     } catch (error) {
-      console.error('Failed to fetch portal URL and email:', error);
+      console.error('Failed to fetch portal URL and email (all methods):', error);
       // Don't fail the entire import if we can't get portal info
       // The token is still valid, just missing some metadata
     }
@@ -423,14 +441,38 @@ async function exchangeAuthSessionForAppSession(authSession: string): Promise<st
   });
 
   console.log('Login response status:', loginResponse.status);
+  console.log('Login response headers:', JSON.stringify([...loginResponse.headers.entries()]));
 
   // Extract _session cookie from Set-Cookie header
-  const setCookieHeader = loginResponse.headers.get('set-cookie');
-  if (setCookieHeader) {
+  // Note: Cloudflare Workers may not expose Set-Cookie in headers.get()
+  // Try to get all Set-Cookie headers
+  const setCookieHeaders: string[] = [];
+  loginResponse.headers.forEach((value, key) => {
+    if (key.toLowerCase() === 'set-cookie') {
+      setCookieHeaders.push(value);
+    }
+  });
+
+  console.log('Set-Cookie headers found:', setCookieHeaders.length);
+
+  for (const setCookieHeader of setCookieHeaders) {
+    console.log('Set-Cookie header:', setCookieHeader.substring(0, 100));
     const sessionMatch = setCookieHeader.match(/_session=([^;]+)/);
     if (sessionMatch) {
       const appSession = decodeURIComponent(sessionMatch[1]);
       console.log('App session extracted from login response');
+      return appSession;
+    }
+  }
+
+  // Also try the standard way
+  const setCookieHeader = loginResponse.headers.get('set-cookie');
+  if (setCookieHeader) {
+    console.log('Set-Cookie from headers.get():', setCookieHeader.substring(0, 100));
+    const sessionMatch = setCookieHeader.match(/_session=([^;]+)/);
+    if (sessionMatch) {
+      const appSession = decodeURIComponent(sessionMatch[1]);
+      console.log('App session extracted from login response (standard way)');
       return appSession;
     }
   }
@@ -446,8 +488,12 @@ async function exchangeAuthSessionForAppSession(authSession: string): Promise<st
     },
   });
 
+  console.log('User API response status:', userResponse.status);
+  console.log('User API response headers:', JSON.stringify([...userResponse.headers.entries()]));
+
   const userSetCookie = userResponse.headers.get('set-cookie');
   if (userSetCookie) {
+    console.log('User API Set-Cookie:', userSetCookie.substring(0, 100));
     const sessionMatch = userSetCookie.match(/_session=([^;]+)/);
     if (sessionMatch) {
       const appSession = decodeURIComponent(sessionMatch[1]);
@@ -456,7 +502,7 @@ async function exchangeAuthSessionForAppSession(authSession: string): Promise<st
     }
   }
 
-  throw new Error('Failed to extract app session cookie from response');
+  throw new Error('Failed to extract app session cookie from response. Check logs for details.');
 }
 
 /**
@@ -474,18 +520,25 @@ async function fetchAppUser(appSession: string): Promise<{ email?: string } | nu
       },
     });
 
+    console.log('User API response status:', response.status);
+
     if (!response.ok) {
-      console.error('Failed to fetch user info:', response.status);
+      const errorText = await response.text();
+      console.error('Failed to fetch user info:', response.status, errorText.substring(0, 200));
       return null;
     }
 
     const data = await response.json() as any;
-    console.log('User info fetched:', { hasEmail: !!data.email });
+    console.log('User data received:', JSON.stringify(data));
+    console.log('User info fetched:', { hasEmail: !!data.email, email: data.email });
     return {
       email: data.email,
     };
   } catch (error) {
     console.error('Error fetching user info:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', error.message, error.stack);
+    }
     return null;
   }
 }
@@ -496,6 +549,9 @@ async function fetchAppUser(appSession: string): Promise<{ email?: string } | nu
 async function fetchAppSubscription(appSession: string): Promise<{ portalUrl?: string } | null> {
   try {
     console.log('Fetching subscription info from app.augmentcode.com...');
+    console.log('App session length:', appSession.length);
+    console.log('App session preview:', appSession.substring(0, 20) + '...');
+
     const response = await fetch('https://app.augmentcode.com/api/subscription', {
       method: 'GET',
       headers: {
@@ -505,18 +561,94 @@ async function fetchAppSubscription(appSession: string): Promise<{ portalUrl?: s
       },
     });
 
+    console.log('Subscription API response status:', response.status);
+
     if (!response.ok) {
-      console.error('Failed to fetch subscription info:', response.status);
+      const errorText = await response.text();
+      console.error('Failed to fetch subscription info:', response.status, errorText.substring(0, 200));
       return null;
     }
 
     const data = await response.json() as any;
-    console.log('Subscription info fetched:', { hasPortalUrl: !!data.portalUrl });
+    console.log('Subscription data received:', JSON.stringify(data));
+    console.log('Subscription info fetched:', { hasPortalUrl: !!data.portalUrl, portalUrl: data.portalUrl });
     return {
       portalUrl: data.portalUrl,
     };
   } catch (error) {
     console.error('Error fetching subscription info:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', error.message, error.stack);
+    }
+    return null;
+  }
+}
+
+/**
+ * Fetch user information using auth session directly
+ */
+async function fetchAppUserWithAuthSession(authSession: string): Promise<{ email?: string } | null> {
+  try {
+    console.log('Fetching user info with auth session...');
+    const response = await fetch('https://app.augmentcode.com/api/user', {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Cookie': `session=${authSession}`,
+      },
+    });
+
+    console.log('User API (auth session) response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Failed to fetch user info with auth session:', response.status, errorText.substring(0, 200));
+      return null;
+    }
+
+    const data = await response.json() as any;
+    console.log('User data (auth session) received:', JSON.stringify(data));
+    return {
+      email: data.email,
+    };
+  } catch (error) {
+    console.error('Error fetching user info with auth session:', error);
+    return null;
+  }
+}
+
+/**
+ * Fetch subscription information using auth session directly
+ */
+async function fetchAppSubscriptionWithAuthSession(authSession: string): Promise<{ portalUrl?: string } | null> {
+  try {
+    console.log('Fetching subscription info with auth session...');
+    const response = await fetch('https://app.augmentcode.com/api/subscription', {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Cookie': `session=${authSession}`,
+      },
+    });
+
+    console.log('Subscription API (auth session) response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Failed to fetch subscription info with auth session:', response.status, errorText.substring(0, 200));
+      return null;
+    }
+
+    const data = await response.json() as any;
+    console.log('Subscription data (auth session) received:', JSON.stringify(data));
+    console.log('Subscription info (auth session) fetched:', { hasPortalUrl: !!data.portalUrl, portalUrl: data.portalUrl });
+    return {
+      portalUrl: data.portalUrl,
+    };
+  } catch (error) {
+    console.error('Error fetching subscription info with auth session:', error);
     return null;
   }
 }
