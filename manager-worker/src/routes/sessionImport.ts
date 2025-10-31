@@ -590,28 +590,50 @@ async function fetchAppSubscription(appSession: string): Promise<{ portalUrl?: s
 async function fetchAppUserWithAuthSession(authSession: string): Promise<{ email?: string } | null> {
   try {
     console.log('Fetching user info with auth session...');
-    const response = await fetch('https://app.augmentcode.com/api/user', {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-        'Cookie': `session=${authSession}`,
-      },
-    });
 
-    console.log('User API (auth session) response status:', response.status);
+    // Try multiple cookie formats
+    const cookieFormats = [
+      `session=${authSession}`,
+      `session=${encodeURIComponent(authSession)}`,
+      `_session=${authSession}`,
+      `_session=${encodeURIComponent(authSession)}`,
+    ];
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Failed to fetch user info with auth session:', response.status, errorText.substring(0, 200));
-      return null;
+    for (let i = 0; i < cookieFormats.length; i++) {
+      const cookieHeader = cookieFormats[i];
+      console.log(`User API attempt ${i + 1}: Trying cookie format: ${cookieHeader.substring(0, 50)}...`);
+
+      const response = await fetch('https://app.augmentcode.com/api/user', {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+          'Cookie': cookieHeader,
+        },
+      });
+
+      console.log(`User API attempt ${i + 1}: Response status:`, response.status);
+
+      if (response.ok) {
+        const data = await response.json() as any;
+        console.log(`User API attempt ${i + 1}: SUCCESS! Data received:`, JSON.stringify(data));
+
+        if (data.email) {
+          console.log('✅ Email found:', data.email);
+          return {
+            email: data.email,
+          };
+        } else {
+          console.log('⚠️ Response OK but no email in data');
+        }
+      } else {
+        const errorText = await response.text();
+        console.log(`User API attempt ${i + 1}: Failed with status ${response.status}:`, errorText.substring(0, 200));
+      }
     }
 
-    const data = await response.json() as any;
-    console.log('User data (auth session) received:', JSON.stringify(data));
-    return {
-      email: data.email,
-    };
+    console.error('❌ All attempts failed to fetch user info');
+    return null;
   } catch (error) {
     console.error('Error fetching user info with auth session:', error);
     return null;
@@ -624,31 +646,58 @@ async function fetchAppUserWithAuthSession(authSession: string): Promise<{ email
 async function fetchAppSubscriptionWithAuthSession(authSession: string): Promise<{ portalUrl?: string } | null> {
   try {
     console.log('Fetching subscription info with auth session...');
-    const response = await fetch('https://app.augmentcode.com/api/subscription', {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-        'Cookie': `session=${authSession}`,
-      },
-    });
+    console.log('Auth session length:', authSession.length);
+    console.log('Auth session first 30 chars:', authSession.substring(0, 30));
 
-    console.log('Subscription API (auth session) response status:', response.status);
+    // Try multiple cookie formats
+    const cookieFormats = [
+      `session=${authSession}`,
+      `session=${encodeURIComponent(authSession)}`,
+      `_session=${authSession}`,
+      `_session=${encodeURIComponent(authSession)}`,
+    ];
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Failed to fetch subscription info with auth session:', response.status, errorText.substring(0, 200));
-      return null;
+    for (let i = 0; i < cookieFormats.length; i++) {
+      const cookieHeader = cookieFormats[i];
+      console.log(`Attempt ${i + 1}: Trying cookie format: ${cookieHeader.substring(0, 50)}...`);
+
+      const response = await fetch('https://app.augmentcode.com/api/subscription', {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+          'Cookie': cookieHeader,
+        },
+      });
+
+      console.log(`Attempt ${i + 1}: Response status:`, response.status);
+      console.log(`Attempt ${i + 1}: Response headers:`, JSON.stringify([...response.headers.entries()]));
+
+      if (response.ok) {
+        const data = await response.json() as any;
+        console.log(`Attempt ${i + 1}: SUCCESS! Data received:`, JSON.stringify(data));
+
+        if (data.portalUrl) {
+          console.log('✅ Portal URL found:', data.portalUrl);
+          return {
+            portalUrl: data.portalUrl,
+          };
+        } else {
+          console.log('⚠️ Response OK but no portalUrl in data');
+        }
+      } else {
+        const errorText = await response.text();
+        console.log(`Attempt ${i + 1}: Failed with status ${response.status}:`, errorText.substring(0, 200));
+      }
     }
 
-    const data = await response.json() as any;
-    console.log('Subscription data (auth session) received:', JSON.stringify(data));
-    console.log('Subscription info (auth session) fetched:', { hasPortalUrl: !!data.portalUrl, portalUrl: data.portalUrl });
-    return {
-      portalUrl: data.portalUrl,
-    };
+    console.error('❌ All attempts failed to fetch subscription info');
+    return null;
   } catch (error) {
     console.error('Error fetching subscription info with auth session:', error);
+    if (error instanceof Error) {
+      console.error('Error stack:', error.stack);
+    }
     return null;
   }
 }
