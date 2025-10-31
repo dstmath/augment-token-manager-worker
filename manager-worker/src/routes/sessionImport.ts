@@ -721,7 +721,7 @@ export async function publicImportSessionHandler(
   ctx: ExecutionContext
 ): Promise<Response> {
   try {
-    const body = await parseJsonBody<{ sessions: string[]; portalUrl?: string }>(request);
+    const body = await parseJsonBody<{ sessions: string[]; portalUrl?: string; email?: string }>(request);
 
     // Validate request body
     if (!body.sessions || !Array.isArray(body.sessions)) {
@@ -735,6 +735,7 @@ export async function publicImportSessionHandler(
     // Only take the first session
     const sessionToken = body.sessions[0];
     const providedPortalUrl = body.portalUrl;
+    const providedEmail = body.email;
 
     if (!sessionToken || typeof sessionToken !== 'string') {
       return createErrorResponse('Session token 无效', 400);
@@ -743,6 +744,7 @@ export async function publicImportSessionHandler(
     console.log('Public session import started');
     console.log('Session token length:', sessionToken.length);
     console.log('Provided portalUrl:', providedPortalUrl || '未提供');
+    console.log('Provided email:', providedEmail || '未提供');
 
     // Extract token information from session
     const tokenInfo = await extractTokenFromSession(sessionToken);
@@ -768,6 +770,9 @@ export async function publicImportSessionHandler(
     // Use provided portalUrl if available, otherwise use extracted one
     const finalPortalUrl = providedPortalUrl || tokenInfo.portal_url || '';
 
+    // Use provided email if available, otherwise use extracted one
+    const finalEmail = providedEmail || tokenInfo.email || '';
+
     // Create token record with auth_session for credit tracking
     // Use a default user ID for public imports
     const publicUserId = 'public-import';
@@ -778,7 +783,7 @@ export async function publicImportSessionHandler(
         tenant_url: tokenInfo.tenant_url,
         access_token: tokenInfo.access_token,
         portal_url: finalPortalUrl,
-        email_note: tokenInfo.email || '',
+        email_note: finalEmail,
         auth_session: sessionToken, // Save auth session for credit consumption tracking
       },
       publicUserId
