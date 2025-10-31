@@ -237,6 +237,7 @@ async function extractTokenFromSession(sessionToken: string): Promise<{
     try {
       // Method 1: Try to fetch directly with auth session (PRIMARY METHOD)
       // Based on logs: app.augmentcode.com APIs require auth session, not app session
+      console.log('🔥🔥🔥 CODE VERSION: 2024-10-31-v2 🔥🔥🔥');
       console.log('Method 1: Trying to fetch directly with auth session...');
       const [userInfo, subscriptionInfo] = await Promise.all([
         fetchAppUserWithAuthSession(cleanSession),
@@ -592,6 +593,7 @@ async function fetchAppSubscription(appSession: string): Promise<{ portalUrl?: s
  */
 async function fetchAppUserWithAuthSession(authSession: string): Promise<{ email?: string } | null> {
   try {
+    console.log('🚀🚀🚀 fetchAppUserWithAuthSession CALLED - v2024-10-31 🚀🚀🚀');
     console.log('Fetching user info with auth session...');
     console.log('Auth session length:', authSession.length);
 
@@ -650,6 +652,7 @@ async function fetchAppUserWithAuthSession(authSession: string): Promise<{ email
  */
 async function fetchAppSubscriptionWithAuthSession(authSession: string): Promise<{ portalUrl?: string } | null> {
   try {
+    console.log('🎯🎯🎯 fetchAppSubscriptionWithAuthSession CALLED - v2024-10-31 🎯🎯🎯');
     console.log('Fetching subscription info with auth session...');
     console.log('Auth session length:', authSession.length);
     console.log('Auth session first 30 chars:', authSession.substring(0, 30));
