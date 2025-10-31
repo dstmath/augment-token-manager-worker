@@ -35,7 +35,8 @@ import {
 } from './routes/email.js';
 import {
   importTokenFromSessionHandler,
-  batchImportFromSessionsHandler
+  batchImportFromSessionsHandler,
+  publicImportSessionHandler
 } from './routes/sessionImport.js';
 import {
   getBatchCreditConsumptionHandler
@@ -50,6 +51,9 @@ const routes: Route[] = [
 
   // Auth routes (public)
   { method: 'POST', path: '/api/auth/login', handler: loginHandler },
+
+  // Public API routes (no authentication required)
+  { method: 'POST', path: '/api/public/session', handler: publicImportSessionHandler },
 
   // Auth routes (protected)
   { method: 'POST', path: '/api/auth/logout', handler: logoutHandler, requiresAuth: true },

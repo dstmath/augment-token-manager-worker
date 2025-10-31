@@ -709,3 +709,116 @@ async function fetchAppSubscriptionWithAuthSession(authSession: string): Promise
     return null;
   }
 }
+
+/**
+ * Public API: Import token from session (for third-party integration)
+ * This endpoint is public and does not require authentication
+ * It takes the first session from the sessions array and optional portalUrl
+ */
+export async function publicImportSessionHandler(
+  request: AuthenticatedRequest,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
+  try {
+    const body = await parseJsonBody<{ sessions: string[]; portalUrl?: string }>(request);
+
+    // Validate request body
+    if (!body.sessions || !Array.isArray(body.sessions)) {
+      return createErrorResponse('sessions 数组是必需的', 400);
+    }
+
+    if (body.sessions.length === 0) {
+      return createErrorResponse('sessions 数组不能为空', 400);
+    }
+
+    // Only take the first session
+    const sessionToken = body.sessions[0];
+    const providedPortalUrl = body.portalUrl;
+
+    if (!sessionToken || typeof sessionToken !== 'string') {
+      return createErrorResponse('Session token 无效', 400);
+    }
+
+    console.log('Public session import started');
+    console.log('Session token length:', sessionToken.length);
+    console.log('Provided portalUrl:', providedPortalUrl || '未提供');
+
+    // Extract token information from session
+    const tokenInfo = await extractTokenFromSession(sessionToken);
+
+    if (!tokenInfo) {
+      return createErrorResponse(
+        '从 Session 提取 Token 失败。请检查：1) Session cookie 有效且未过期，2) 已登录 auth.augmentcode.com，3) 账户未被封禁',
+        400
+      );
+    }
+
+    // Validate extracted token data
+    if (!tokenInfo.access_token) {
+      return createErrorResponse('无效的 Session：未找到 access token', 400);
+    }
+
+    if (!tokenInfo.tenant_url) {
+      return createErrorResponse('无效的 Session：未找到 tenant URL', 400);
+    }
+
+    console.log('Successfully extracted token from session');
+
+    // Use provided portalUrl if available, otherwise use extracted one
+    const finalPortalUrl = providedPortalUrl || tokenInfo.portal_url || '';
+
+    // Create token record with auth_session for credit tracking
+    // Use a default user ID for public imports
+    const publicUserId = 'public-import';
+    const tokenService = new TokenService(env);
+
+    let token = await tokenService.createToken(
+      {
+        tenant_url: tokenInfo.tenant_url,
+        access_token: tokenInfo.access_token,
+        portal_url: finalPortalUrl,
+        email_note: tokenInfo.email || '',
+        auth_session: sessionToken, // Save auth session for credit consumption tracking
+      },
+      publicUserId
+    );
+
+    // Automatically refresh portal info after creation if portal_url exists
+    if (token.portal_url) {
+      console.log('Refreshing portal info for newly imported token...');
+      try {
+        token = await tokenService.refreshTokenInfo(token.id) || token;
+        console.log('Portal info refreshed successfully');
+      } catch (error) {
+        console.error('Failed to refresh portal info:', error);
+        // Don't fail the import if portal refresh fails
+      }
+    }
+
+    // Build success message
+    const message = `成功 1 个，失败 0 个`;
+
+    return createSuccessResponse(
+      {
+        imported: 1,
+        failed: 0,
+        success: [token],
+        errors: [],
+      },
+      message,
+      201
+    );
+  } catch (error) {
+    console.error('Public session import error:', error);
+
+    // Build error message
+    const errorMessage = error instanceof Error ? error.message : '导入失败';
+    const message = `成功 0 个，失败 1 个`;
+
+    return createErrorResponse(
+      message + ' - ' + errorMessage,
+      500
+    );
+  }
+}
