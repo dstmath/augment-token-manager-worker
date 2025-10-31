@@ -228,12 +228,38 @@ async function extractTokenFromSession(sessionToken: string): Promise<{
       return null;
     }
 
+    console.log('Successfully extracted access token, now fetching portal URL and email...');
+
+    // Step 4: Exchange auth session for app session to get portal_url and email
+    let portalUrl: string | undefined = undefined;
+    let email: string | undefined = undefined;
+
+    try {
+      const appSession = await exchangeAuthSessionForAppSession(cleanSession);
+      console.log('App session obtained, fetching user info...');
+
+      // Fetch user info and subscription info in parallel
+      const [userInfo, subscriptionInfo] = await Promise.all([
+        fetchAppUser(appSession),
+        fetchAppSubscription(appSession),
+      ]);
+
+      email = userInfo?.email;
+      portalUrl = subscriptionInfo?.portalUrl;
+
+      console.log('User info fetched:', { hasEmail: !!email, hasPortalUrl: !!portalUrl });
+    } catch (error) {
+      console.error('Failed to fetch portal URL and email:', error);
+      // Don't fail the entire import if we can't get portal info
+      // The token is still valid, just missing some metadata
+    }
+
     console.log('Successfully extracted token from session');
     return {
       access_token: tokenData.access_token,
       tenant_url: tenantUrl,
-      portal_url: undefined,
-      email: undefined,
+      portal_url: portalUrl,
+      email: email,
     };
   } catch (error) {
     console.error('Failed to extract token from session - Exception:', error);
@@ -376,3 +402,121 @@ export async function batchImportFromSessionsHandler(
   }
 }
 
+/**
+ * Exchange auth session for app session
+ * This mimics the browser's login flow to get the app session cookie
+ */
+async function exchangeAuthSessionForAppSession(authSession: string): Promise<string> {
+  console.log('Exchanging auth session for app session...');
+
+  // Step 1: Visit app.augmentcode.com/login with auth session cookie
+  // This triggers the OAuth flow and sets the _session cookie
+  const loginResponse = await fetch('https://app.augmentcode.com/login', {
+    method: 'GET',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Cookie': `session=${authSession}`,
+    },
+    redirect: 'manual', // Don't follow redirects automatically
+  });
+
+  console.log('Login response status:', loginResponse.status);
+
+  // Extract _session cookie from Set-Cookie header
+  const setCookieHeader = loginResponse.headers.get('set-cookie');
+  if (setCookieHeader) {
+    const sessionMatch = setCookieHeader.match(/_session=([^;]+)/);
+    if (sessionMatch) {
+      const appSession = decodeURIComponent(sessionMatch[1]);
+      console.log('App session extracted from login response');
+      return appSession;
+    }
+  }
+
+  // Step 2: If not found in login response, try /api/user
+  console.log('App session not found in login response, trying /api/user...');
+  const userResponse = await fetch('https://app.augmentcode.com/api/user', {
+    method: 'GET',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept': 'application/json',
+      'Cookie': `session=${authSession}`,
+    },
+  });
+
+  const userSetCookie = userResponse.headers.get('set-cookie');
+  if (userSetCookie) {
+    const sessionMatch = userSetCookie.match(/_session=([^;]+)/);
+    if (sessionMatch) {
+      const appSession = decodeURIComponent(sessionMatch[1]);
+      console.log('App session extracted from user API response');
+      return appSession;
+    }
+  }
+
+  throw new Error('Failed to extract app session cookie from response');
+}
+
+/**
+ * Fetch user information from app.augmentcode.com
+ */
+async function fetchAppUser(appSession: string): Promise<{ email?: string } | null> {
+  try {
+    console.log('Fetching user info from app.augmentcode.com...');
+    const response = await fetch('https://app.augmentcode.com/api/user', {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Cookie': `_session=${encodeURIComponent(appSession)}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Failed to fetch user info:', response.status);
+      return null;
+    }
+
+    const data = await response.json() as any;
+    console.log('User info fetched:', { hasEmail: !!data.email });
+    return {
+      email: data.email,
+    };
+  } catch (error) {
+    console.error('Error fetching user info:', error);
+    return null;
+  }
+}
+
+/**
+ * Fetch subscription information from app.augmentcode.com
+ */
+async function fetchAppSubscription(appSession: string): Promise<{ portalUrl?: string } | null> {
+  try {
+    console.log('Fetching subscription info from app.augmentcode.com...');
+    const response = await fetch('https://app.augmentcode.com/api/subscription', {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Cookie': `_session=${encodeURIComponent(appSession)}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Failed to fetch subscription info:', response.status);
+      return null;
+    }
+
+    const data = await response.json() as any;
+    console.log('Subscription info fetched:', { hasPortalUrl: !!data.portalUrl });
+    return {
+      portalUrl: data.portalUrl,
+    };
+  } catch (error) {
+    console.error('Error fetching subscription info:', error);
+    return null;
+  }
+}
