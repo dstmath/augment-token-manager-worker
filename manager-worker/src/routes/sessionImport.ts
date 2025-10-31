@@ -235,36 +235,39 @@ async function extractTokenFromSession(sessionToken: string): Promise<{
     let email: string | undefined = undefined;
 
     try {
-      // Method 1: Try to exchange auth session for app session
-      console.log('Method 1: Trying to exchange auth session for app session...');
-      try {
-        const appSession = await exchangeAuthSessionForAppSession(cleanSession);
-        console.log('App session obtained successfully, fetching user info...');
+      // Method 1: Try to fetch directly with auth session (PRIMARY METHOD)
+      // Based on logs: app.augmentcode.com APIs require auth session, not app session
+      console.log('Method 1: Trying to fetch directly with auth session...');
+      const [userInfo, subscriptionInfo] = await Promise.all([
+        fetchAppUserWithAuthSession(cleanSession),
+        fetchAppSubscriptionWithAuthSession(cleanSession),
+      ]);
 
-        // Fetch user info and subscription info in parallel
-        const [userInfo, subscriptionInfo] = await Promise.all([
-          fetchAppUser(appSession),
-          fetchAppSubscription(appSession),
-        ]);
+      email = userInfo?.email;
+      portalUrl = subscriptionInfo?.portalUrl;
 
-        email = userInfo?.email;
-        portalUrl = subscriptionInfo?.portalUrl;
+      console.log('User info fetched via auth session:', { hasEmail: !!email, hasPortalUrl: !!portalUrl });
 
-        console.log('User info fetched via app session:', { hasEmail: !!email, hasPortalUrl: !!portalUrl });
-      } catch (appSessionError) {
-        console.error('Failed to use app session method:', appSessionError);
+      // If Method 1 failed, try Method 2
+      if (!email || !portalUrl) {
+        console.log('Method 2: Trying to exchange auth session for app session...');
+        try {
+          const appSession = await exchangeAuthSessionForAppSession(cleanSession);
+          console.log('App session obtained successfully, fetching user info...');
 
-        // Method 2: Try to fetch directly with auth session
-        console.log('Method 2: Trying to fetch directly with auth session...');
-        const [userInfo, subscriptionInfo] = await Promise.all([
-          fetchAppUserWithAuthSession(cleanSession),
-          fetchAppSubscriptionWithAuthSession(cleanSession),
-        ]);
+          // Fetch user info and subscription info in parallel
+          const [userInfo2, subscriptionInfo2] = await Promise.all([
+            fetchAppUser(appSession),
+            fetchAppSubscription(appSession),
+          ]);
 
-        email = userInfo?.email;
-        portalUrl = subscriptionInfo?.portalUrl;
+          if (!email) email = userInfo2?.email;
+          if (!portalUrl) portalUrl = subscriptionInfo2?.portalUrl;
 
-        console.log('User info fetched via auth session:', { hasEmail: !!email, hasPortalUrl: !!portalUrl });
+          console.log('User info fetched via app session:', { hasEmail: !!email, hasPortalUrl: !!portalUrl });
+        } catch (appSessionError) {
+          console.error('Failed to use app session method:', appSessionError);
+        }
       }
     } catch (error) {
       console.error('Failed to fetch portal URL and email (all methods):', error);
@@ -590,25 +593,27 @@ async function fetchAppSubscription(appSession: string): Promise<{ portalUrl?: s
 async function fetchAppUserWithAuthSession(authSession: string): Promise<{ email?: string } | null> {
   try {
     console.log('Fetching user info with auth session...');
+    console.log('Auth session length:', authSession.length);
 
-    // Try multiple cookie formats
+    // Try multiple cookie formats - prioritize session cookie based on 401 error
     const cookieFormats = [
-      `session=${authSession}`,
-      `session=${encodeURIComponent(authSession)}`,
-      `_session=${authSession}`,
-      `_session=${encodeURIComponent(authSession)}`,
+      { name: 'session (raw)', value: `session=${authSession}` },
+      { name: 'session (encoded)', value: `session=${encodeURIComponent(authSession)}` },
+      { name: '_session (raw)', value: `_session=${authSession}` },
+      { name: '_session (encoded)', value: `_session=${encodeURIComponent(authSession)}` },
     ];
 
     for (let i = 0; i < cookieFormats.length; i++) {
-      const cookieHeader = cookieFormats[i];
-      console.log(`User API attempt ${i + 1}: Trying cookie format: ${cookieHeader.substring(0, 50)}...`);
+      const format = cookieFormats[i];
+      console.log(`User API attempt ${i + 1} [${format.name}]: Trying...`);
 
       const response = await fetch('https://app.augmentcode.com/api/user', {
         method: 'GET',
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Accept': 'application/json',
-          'Cookie': cookieHeader,
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cookie': format.value,
         },
       });
 
@@ -616,10 +621,10 @@ async function fetchAppUserWithAuthSession(authSession: string): Promise<{ email
 
       if (response.ok) {
         const data = await response.json() as any;
-        console.log(`User API attempt ${i + 1}: SUCCESS! Data received:`, JSON.stringify(data));
+        console.log(`User API attempt ${i + 1}: ✅ SUCCESS! Data:`, JSON.stringify(data));
 
         if (data.email) {
-          console.log('✅ Email found:', data.email);
+          console.log(`✅ Email found with ${format.name}:`, data.email);
           return {
             email: data.email,
           };
@@ -628,7 +633,7 @@ async function fetchAppUserWithAuthSession(authSession: string): Promise<{ email
         }
       } else {
         const errorText = await response.text();
-        console.log(`User API attempt ${i + 1}: Failed with status ${response.status}:`, errorText.substring(0, 200));
+        console.log(`User API attempt ${i + 1}: ❌ Failed:`, errorText.substring(0, 200));
       }
     }
 
@@ -649,36 +654,36 @@ async function fetchAppSubscriptionWithAuthSession(authSession: string): Promise
     console.log('Auth session length:', authSession.length);
     console.log('Auth session first 30 chars:', authSession.substring(0, 30));
 
-    // Try multiple cookie formats
+    // Try multiple cookie formats - prioritize session cookie based on 401 error
     const cookieFormats = [
-      `session=${authSession}`,
-      `session=${encodeURIComponent(authSession)}`,
-      `_session=${authSession}`,
-      `_session=${encodeURIComponent(authSession)}`,
+      { name: 'session (raw)', value: `session=${authSession}` },
+      { name: 'session (encoded)', value: `session=${encodeURIComponent(authSession)}` },
+      { name: '_session (raw)', value: `_session=${authSession}` },
+      { name: '_session (encoded)', value: `_session=${encodeURIComponent(authSession)}` },
     ];
 
     for (let i = 0; i < cookieFormats.length; i++) {
-      const cookieHeader = cookieFormats[i];
-      console.log(`Attempt ${i + 1}: Trying cookie format: ${cookieHeader.substring(0, 50)}...`);
+      const format = cookieFormats[i];
+      console.log(`Subscription API attempt ${i + 1} [${format.name}]: Trying...`);
 
       const response = await fetch('https://app.augmentcode.com/api/subscription', {
         method: 'GET',
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Accept': 'application/json',
-          'Cookie': cookieHeader,
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cookie': format.value,
         },
       });
 
-      console.log(`Attempt ${i + 1}: Response status:`, response.status);
-      console.log(`Attempt ${i + 1}: Response headers:`, JSON.stringify([...response.headers.entries()]));
+      console.log(`Subscription API attempt ${i + 1}: Response status:`, response.status);
 
       if (response.ok) {
         const data = await response.json() as any;
-        console.log(`Attempt ${i + 1}: SUCCESS! Data received:`, JSON.stringify(data));
+        console.log(`Subscription API attempt ${i + 1}: ✅ SUCCESS! Data:`, JSON.stringify(data));
 
         if (data.portalUrl) {
-          console.log('✅ Portal URL found:', data.portalUrl);
+          console.log(`✅ Portal URL found with ${format.name}:`, data.portalUrl);
           return {
             portalUrl: data.portalUrl,
           };
@@ -687,7 +692,7 @@ async function fetchAppSubscriptionWithAuthSession(authSession: string): Promise
         }
       } else {
         const errorText = await response.text();
-        console.log(`Attempt ${i + 1}: Failed with status ${response.status}:`, errorText.substring(0, 200));
+        console.log(`Subscription API attempt ${i + 1}: ❌ Failed:`, errorText.substring(0, 200));
       }
     }
 
