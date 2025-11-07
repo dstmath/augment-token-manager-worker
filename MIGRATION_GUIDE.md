@@ -98,7 +98,7 @@ nano .env  # 编辑配置
 
 ```env
 DATABASE_URL="mysql://augment_user:your_password@localhost:3306/augment_info"
-PORT=3000
+PORT=6000
 SESSION_SECRET=your-secret-key
 USER_CREDENTIALS="admin:admin123"
 CORS_ORIGIN=http://localhost:5173
@@ -158,7 +158,7 @@ nano .env.production
 配置内容：
 
 ```env
-VITE_API_BASE_URL=http://localhost:3000
+VITE_API_BASE_URL=http://localhost:6000
 ```
 
 ### 步骤 7: 测试
