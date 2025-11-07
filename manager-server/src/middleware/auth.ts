@@ -6,6 +6,7 @@ import { sendError } from '../utils/response.js';
 /**
  * Authentication middleware
  * Validates session token and attaches user to request
+ * Supports both Authorization header (Bearer token) and Cookie
  */
 export async function authMiddleware(
   req: AuthenticatedRequest,
@@ -13,15 +14,29 @@ export async function authMiddleware(
   next: NextFunction
 ): Promise<void> {
   try {
-    // Get session token from Authorization header
+    let sessionToken: string | undefined;
+
+    // Try to get session token from Authorization header first
     const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      sessionToken = authHeader.substring(7); // Remove 'Bearer ' prefix
+    }
+
+    // If not found in header, try to get from cookie
+    if (!sessionToken && req.headers.cookie) {
+      const cookies = req.headers.cookie.split(';').reduce((acc, cookie) => {
+        const [key, value] = cookie.trim().split('=');
+        acc[key] = value;
+        return acc;
+      }, {} as Record<string, string>);
+
+      sessionToken = cookies['auth_token'] || cookies['session'];
+    }
+
+    if (!sessionToken) {
       sendError(res, 'Authentication required', 401);
       return;
     }
-    
-    const sessionToken = authHeader.substring(7); // Remove 'Bearer ' prefix
     
     // Find session in database
     const session = await prisma.session.findUnique({
