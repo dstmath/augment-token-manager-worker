@@ -195,7 +195,7 @@ export function getQueryParams(url: URL): Record<string, string> {
  */
 export function getPaginationParams(url: URL): { page: number; limit: number } {
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
-  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '10', 10)));
+  const limit = Math.min(100000, Math.max(1, parseInt(url.searchParams.get('limit') || '10', 10)));
   
   return { page, limit };
 }

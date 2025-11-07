@@ -138,6 +138,13 @@ export class TokenService {
       }
     }
     
+    // Sort tokens by created_at in descending order (newest first)
+    tokens.sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return dateB - dateA;
+    });
+    
     return {
       tokens,
       total,
@@ -156,7 +163,7 @@ export class TokenService {
     createdBy?: string;
   }): Promise<TokenRecord[]> {
     // Get all tokens (in a real implementation, you'd use a proper search index)
-    const { tokens } = await this.listTokens(1, 1000); // Get up to 1000 tokens
+    const { tokens } = await this.listTokens(1, 100000); // Get up to 100000 tokens
     
     let filteredTokens = tokens;
     
@@ -176,6 +183,13 @@ export class TokenService {
         token.created_by === criteria.createdBy
       );
     }
+    
+    // Sort by created_at in descending order (newest first)
+    filteredTokens.sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return dateB - dateA;
+    });
     
     return filteredTokens;
   }
@@ -692,6 +706,13 @@ export class TokenService {
           }
         }
 
+        // Sort by created_at in descending order (newest first)
+        tokens.sort((a, b) => {
+          const dateA = new Date(a.created_at).getTime();
+          const dateB = new Date(b.created_at).getTime();
+          return dateB - dateA;
+        });
+
         return tokens;
       } else {
         // Index doesn't exist, fallback to scan and build index
@@ -711,7 +732,7 @@ export class TokenService {
   private async scanAndBuildEmailIndex(emailNote: string): Promise<TokenRecord[]> {
     try {
       // Get all tokens using the original method
-      const { tokens } = await this.listTokens(1, 1000);
+      const { tokens } = await this.listTokens(1, 100000);
       const matchingTokens = tokens.filter((token: TokenRecord) => token.email_note === emailNote);
 
       // Build index for all tokens we scanned (not just matching ones)
@@ -733,6 +754,13 @@ export class TokenService {
       }
 
       console.log(`Built email indexes for ${emailIndexMap.size} email addresses`);
+
+      // Sort matching tokens by created_at in descending order (newest first)
+      matchingTokens.sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateB - dateA;
+      });
 
       return matchingTokens;
     } catch (error) {

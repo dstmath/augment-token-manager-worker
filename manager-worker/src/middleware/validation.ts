@@ -123,8 +123,8 @@ export async function queryValidationMiddleware(
   
   if (limit) {
     const limitNum = parseInt(limit, 10);
-    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
-      errors.push('Limit must be between 1 and 100');
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100000) {
+      errors.push('Limit must be between 1 and 100000');
     }
   }
   
